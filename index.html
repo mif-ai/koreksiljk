@@ -22,7 +22,7 @@
     }
     .item-soal-box label { font-weight: bold; font-size: 12.5px; color: #0d6efd; margin: 0; }
 
-    #previewFotoLjk {
+    #previewFotoLjk, #previewEditLjk {
       max-width: 100%; height: auto; border-radius: 6px; border: 2px solid #0d6efd;
     }
 
@@ -116,6 +116,12 @@
 
             <input type="hidden" id="inputJawaban">
 
+            <!-- INPUT TOKEN UJIAN WAJIB SEBELUM SUBMIT -->
+            <div class="mb-3 p-3 bg-light border rounded">
+              <label class="form-label text-primary fw-bold mb-1">🔑 Masukkan Token Ujian (Wajib dari Guru):</label>
+              <input type="text" id="txtTokenSiswa" class="form-control form-control-lg text-center text-uppercase fw-bold" placeholder="Contoh: A1B2C3">
+            </div>
+
             <div class="mb-3" id="boxUploadDarurat" style="display:none;">
               <label class="form-label text-danger fw-bold">Upload Foto LJK Fisik (Wajib untuk Token Darurat):</label>
               <input type="file" id="fileManual" accept="image/*" class="form-control">
@@ -153,20 +159,31 @@
           <li class="nav-item"><a class="nav-link" id="tab3" href="javascript:void(0);" onclick="switchAdminTab(3)">Identitas Sekolah</a></li>
         </ul>
 
-        <!-- Tab 1 -->
+        <!-- Tab 1: AUDIT & NILAI (WITH FILTER & CRUD) -->
         <div id="admin-tab-1" class="admin-panel border rounded p-3 bg-white shadow-sm">
-          <h6 class="text-muted mb-3">Daftar Hasil Ujian Masuk</h6>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="text-primary m-0 fw-bold">Daftar Hasil Ujian Masuk (Audit & Nilai)</h6>
+            <div class="d-flex gap-2">
+              <select id="filterAuditKelas" class="form-select form-select-sm" style="width: 140px;" onchange="filterAndRenderAudit()">
+                <option value="">Semua Kelas</option>
+              </select>
+              <select id="filterAuditUjian" class="form-select form-select-sm" style="width: 180px;" onchange="filterAndRenderAudit()">
+                <option value="">Semua Mapel</option>
+              </select>
+            </div>
+          </div>
+
           <div class="table-responsive">
-            <table class="table table-hover align-middle">
+            <table class="table table-hover align-middle" style="font-size: 13px;">
               <thead class="table-light">
-                <tr><th>Kelas</th><th>Nama</th><th>Mapel</th><th>Skor</th><th>Aksi</th></tr>
+                <tr><th>Kelas</th><th>Nama</th><th>Mapel</th><th>Skor</th><th>Bukti Foto</th><th>Aksi CRUD</th></tr>
               </thead>
-              <tbody id="tbAudit"><tr><td colspan="5" class="text-center">Memuat data...</td></tr></tbody>
+              <tbody id="tbAudit"><tr><td colspan="6" class="text-center text-muted">Memuat data...</td></tr></tbody>
             </table>
           </div>
         </div>
 
-        <!-- Tab 2 -->
+        <!-- Tab 2: MANAJEMEN UJIAN -->
         <div id="admin-tab-2" class="admin-panel border rounded p-4 bg-white shadow-sm" style="display:none;">
           <div class="row">
             <div class="col-md-5 border-end pe-4">
@@ -205,7 +222,7 @@
           </div>
         </div>
 
-        <!-- Tab 3 -->
+        <!-- Tab 3: IDENTITAS SEKOLAH -->
         <div id="admin-tab-3" class="admin-panel border rounded p-4 bg-white shadow-sm" style="display:none; max-width:500px;">
           <h6 class="text-primary mb-3">Pengaturan Header LJK</h6>
           <div class="mb-2"><label class="form-label small">Kop Dinas</label><input type="text" id="setKop" class="form-control form-control-sm"></div>
@@ -214,6 +231,53 @@
           <button class="btn btn-success mt-3 w-100" onclick="simpanPengaturanAdmin()">Simpan Pengaturan</button>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL EDIT DATA NILAI AUDIT (UPDATE & RE-SCAN AI) -->
+  <div class="modal fade" id="modalEditAudit" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title fw-bold">✏️ Edit Data Nilai & Re-Scan AI</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editAuditRow">
+          <input type="hidden" id="editAuditIdUjian">
+          <input type="hidden" id="editAuditOldFileId">
+          <input type="hidden" id="editAuditOldFileUrl">
+
+          <div class="row mb-3">
+            <div class="col-md-6"><strong id="editInfoSiswa">Siswa</strong></div>
+            <div class="col-md-6 text-end"><span class="badge bg-primary fs-6" id="editInfoSkor">Skor: 0</span></div>
+          </div>
+
+          <div class="mb-3 p-3 bg-light border rounded">
+            <label class="form-label fw-bold">Upload Foto LJK Baru (Gambar Lama di Drive Otomatis Terhapus):</label>
+            <input type="file" id="fileEditLjk" accept="image/*" class="form-control mb-2" onchange="previewFileEdit(event)">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="chkReScanAI" checked>
+              <label class="form-check-label fw-bold text-primary" for="chkReScanAI">
+                🤖 Minta Nilai AI Sekali Lagi (Scan ulang foto baru dengan Gemini AI Vision)
+              </label>
+            </div>
+          </div>
+
+          <div class="mb-3 text-center">
+            <img id="previewEditLjk" src="" alt="Foto LJK Lama" style="max-height:220px;">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold">Jawaban Terdeteksi (String Koma):</label>
+            <input type="text" id="txtEditJawaban" class="form-control form-control-sm text-uppercase">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" id="btnSimpanEditAudit" class="btn btn-success fw-bold" onclick="eksekusiUpdateAudit()">Simpan Perubahan & Update Drive</button>
+        </div>
       </div>
     </div>
   </div>
@@ -291,8 +355,10 @@
     const GAS_URL = "https://script.google.com/macros/s/AKfycbxO9WEDtHMmKC8S8xHLMhV-6qfxd7dxPtynlDc2NE0vu9ngK06H1CNPe74hOT5_XZrr/exec";
 
     let dataGlobal = { sekolah: {}, siswa: {}, ujian: [] };
+    let rawAuditData = [];
     let streamKamera = null; 
     let fotoBase64Akhir = null; 
+    let editFotoBase64Baru = null;
     let metodeInput = "Scan AI Vision";
 
     function base64ToBlob(base64, mimeType = 'application/pdf') {
@@ -584,6 +650,7 @@
 
         document.getElementById('areaKonfirmasi').style.display = 'block';
         document.getElementById('boxUploadDarurat').style.display = 'block';
+        document.getElementById('txtTokenSiswa').value = token;
         tampilkanNotif("Token Valid", "Silakan pilih jawaban per nomor soal pada kolom di bawah.", "success");
       } else { 
         tampilkanNotif("Token Salah", "Token darurat tidak valid!", "error"); 
@@ -591,13 +658,20 @@
     }
 
     function kirimData() {
+      let tokenInput = document.getElementById('txtTokenSiswa').value.trim();
+      if (!tokenInput) {
+        tampilkanNotif("Token Wajib Diisi", "Masukkan Token Ujian dari Guru sebelum mengirim jawaban!", "warning");
+        return;
+      }
+
       let btn = document.getElementById('btnKirim'); btn.innerHTML = "Memproses..."; btn.disabled = true;
       let u_data = dataGlobal.ujian.find(x => x.id_ujian == document.getElementById('selUjian').value);
       
       let payload = {
         id_ujian: u_data.id_ujian, mapel: u_data.mapel, materi: u_data.materi, kelas: document.getElementById('selKelas').value,
         nama: document.getElementById('selNama').value, jk: document.getElementById('selNama').options[document.getElementById('selNama').selectedIndex].getAttribute('data-jk'),
-        jawaban: document.getElementById('inputJawaban').value, metode: metodeInput, fotoBase64: fotoBase64Akhir
+        jawaban: document.getElementById('inputJawaban').value, metode: metodeInput, fotoBase64: fotoBase64Akhir,
+        token_input: tokenInput
       };
 
       if(metodeInput == "Manual Token") {
@@ -642,25 +716,129 @@
 
     function refreshDataAdmin() {
       callApi('getAuditData', {}, res => {
-        let tb = document.getElementById('tbAudit'); tb.innerHTML = '';
-        if(!res.data || res.data.length === 0) {
-          tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Belum ada nilai.</td></tr>';
-          return;
-        }
-        res.data.forEach(d => {
-          tb.innerHTML += `<tr><td>${d.kelas}</td><td>${d.nama}</td><td>${d.mapel}</td>
-          <td><strong>${d.skor}</strong></td><td><a href="${d.link_foto}" target="_blank" class="btn btn-sm btn-info">Foto</a>
-          <button onclick="hapusNilai(${d.row}, '${d.file_id}')" class="btn btn-sm btn-danger">Hapus</button></td></tr>`;
-        });
+        rawAuditData = res.data || [];
+        populateFilterAuditDropdowns();
+        filterAndRenderAudit();
       });
 
       callApi('getInitData', {}, res => renderAllUI(res));
     }
 
+    function populateFilterAuditDropdowns() {
+      let selKls = document.getElementById('filterAuditKelas');
+      let selUji = document.getElementById('filterAuditUjian');
+
+      selKls.innerHTML = '<option value="">Semua Kelas</option>';
+      selUji.innerHTML = '<option value="">Semua Mapel</option>';
+
+      let kelasSet = new Set();
+      let mapelSet = new Set();
+
+      rawAuditData.forEach(d => {
+        if (d.kelas) kelasSet.add(d.kelas);
+        if (d.mapel) mapelSet.add(d.mapel);
+      });
+
+      Array.from(kelasSet).sort().forEach(k => selKls.innerHTML += `<option value="${k}">${k}</option>`);
+      Array.from(mapelSet).sort().forEach(m => selUji.innerHTML += `<option value="${m}">${m}</option>`);
+    }
+
+    function filterAndRenderAudit() {
+      let klsFilter = document.getElementById('filterAuditKelas').value;
+      let ujiFilter = document.getElementById('filterAuditUjian').value;
+
+      let filtered = rawAuditData.filter(d => {
+        let matchKls = !klsFilter || d.kelas === klsFilter;
+        let matchUji = !ujiFilter || d.mapel === ujiFilter;
+        return matchKls && matchUji;
+      });
+
+      let tb = document.getElementById('tbAudit'); tb.innerHTML = '';
+      if(filtered.length === 0) {
+        tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Data nilai tidak ditemukan.</td></tr>';
+        return;
+      }
+
+      filtered.forEach(d => {
+        tb.innerHTML += `<tr>
+          <td><b>${d.kelas}</b></td>
+          <td>${d.nama}</td>
+          <td>${d.mapel} <br><small class="text-muted">(${d.materi})</small></td>
+          <td><span class="badge bg-success fs-6">${d.skor}</span></td>
+          <td><a href="${d.link_foto}" target="_blank" class="btn btn-sm btn-outline-info">📄 Lihat Foto Drive</a></td>
+          <td>
+            <button onclick="bukaModalEditAudit(${d.row})" class="btn btn-sm btn-warning mb-1">✏️ Edit & Re-Scan AI</button>
+            <button onclick="hapusNilai(${d.row}, '${d.file_id}')" class="btn btn-sm btn-danger mb-1">🗑️ Hapus & Drive</button>
+          </td>
+        </tr>`;
+      });
+    }
+
+    function bukaModalEditAudit(rowNum) {
+      let item = rawAuditData.find(x => x.row == rowNum);
+      if(!item) return;
+
+      document.getElementById('editAuditRow').value = item.row;
+      document.getElementById('editAuditIdUjian').value = item.id_ujian;
+      document.getElementById('editAuditOldFileId').value = item.file_id || '';
+      document.getElementById('editAuditOldFileUrl').value = item.link_foto || '';
+
+      document.getElementById('editInfoSiswa').innerText = `${item.nama} (${item.kelas}) - ${item.mapel}`;
+      document.getElementById('editInfoSkor').innerText = "Skor Sekarang: " + item.skor;
+      document.getElementById('txtEditJawaban').value = item.jawaban;
+      document.getElementById('previewEditLjk').src = item.link_foto || '';
+      document.getElementById('fileEditLjk').value = '';
+      editFotoBase64Baru = null;
+
+      let modalEl = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditAudit'));
+      modalEl.show();
+    }
+
+    function previewFileEdit(event) {
+      let file = event.target.files[0];
+      if (!file) return;
+      let reader = new FileReader();
+      reader.onload = e => {
+        editFotoBase64Baru = e.target.result;
+        document.getElementById('previewEditLjk').src = editFotoBase64Baru;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function eksekusiUpdateAudit() {
+      let btn = document.getElementById('btnSimpanEditAudit');
+      btn.innerText = "⏳ Memproses Gemini AI & Drive..."; btn.disabled = true;
+
+      let item = rawAuditData.find(x => x.row == document.getElementById('editAuditRow').value);
+
+      let payload = {
+        row: document.getElementById('editAuditRow').value,
+        id_ujian: document.getElementById('editAuditIdUjian').value,
+        nama: item.nama, kelas: item.kelas, mapel: item.mapel,
+        jawaban: document.getElementById('txtEditJawaban').value,
+        oldFileId: document.getElementById('editAuditOldFileId').value,
+        oldFileUrl: document.getElementById('editAuditOldFileUrl').value,
+        fotoBase64: editFotoBase64Baru,
+        reScanAI: document.getElementById('chkReScanAI').checked
+      };
+
+      callApi('updateDataNilai', payload, res => {
+        btn.innerText = "Simpan Perubahan & Update Drive"; btn.disabled = false;
+        if(res.status === "sukses") {
+          tampilkanNotif("Update Berhasil", `Data nilai diperbarui!<br>Skor Baru: <b>${res.skor}</b><br>Foto lama di Google Drive telah dihapus/diganti.`, "success");
+          let modalEl = bootstrap.Modal.getInstance(document.getElementById('modalEditAudit'));
+          if (modalEl) modalEl.hide();
+          refreshDataAdmin();
+        } else {
+          tampilkanNotif("Gagal Update", res.pesan, "error");
+        }
+      });
+    }
+
     function hapusNilai(row, fileId) {
-      if(confirm("Hapus data nilai ini secara permanen?")) {
+      if(confirm("Hapus data nilai siswa ini? Foto LJK fisik yang tersimpan di Google Drive juga akan DIHAPUS PERMANEN.")) {
         callApi('hapusDataNilai', { row: row, fileId: fileId }, res => {
-          tampilkanNotif("Dihapus", "Data berhasil dihapus.", "success");
+          tampilkanNotif("Dihapus", "Data nilai & foto di Google Drive berhasil dihapus.", "success");
           refreshDataAdmin();
         });
       }
