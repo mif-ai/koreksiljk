@@ -841,94 +841,91 @@
       return { x, y };
     }
 
-    // ALGORITMA PEMINDAI PRESISI KOORDINAT LJK TERBARU
-    function deteksiOatWarpedCanvas(warpedCanvas, totalSoal) {
-      let w = warpedCanvas.width;
-      let h = warpedCanvas.height;
-      let ctx = warpedCanvas.getContext('2d');
-      let pixels = ctx.getImageData(0, 0, w, h).data;
+    // ALGORITMA OM-R BINARISASI: PENGHITUNG KEPATATAN PIKSEL HITAM
+function deteksiOatWarpedCanvas(warpedCanvas, totalSoal) {
+  let w = warpedCanvas.width;
+  let h = warpedCanvas.height;
+  let ctx = warpedCanvas.getContext('2d');
+  let pixels = ctx.getImageData(0, 0, w, h).data;
 
-      let half = Math.ceil(totalSoal / 2);
-      let answers = [];
-      let samplingPoints = [];
-      let options = ['A', 'B', 'C', 'D', 'E'];
+  let half = Math.ceil(totalSoal / 2);
+  let answers = [];
+  let samplingPoints = [];
+  let options = ['A', 'B', 'C', 'D', 'E'];
 
-      // KOORDINAT PERSISI X KOLOM KIRI DAN KOLOM KANAN
-      let leftX  = [112, 164, 216, 268, 320];
-      let rightX = [512, 564, 616, 668, 720];
+  let leftXBase  = [112, 164, 216, 268, 320];
+  let rightXBase = [512, 564, 616, 668, 720];
 
-      let gridTop = 115;
-      let gridBottom = 925;
-      let rowHeight = (gridBottom - gridTop) / half;
-      let radius = Math.min(8, Math.floor(rowHeight * 0.32));
+  let gridTopEst = 115;
+  let gridBottomEst = 925;
+  let estRowHeight = (gridBottomEst - gridTopEst) / half;
+  let radius = Math.min(9, Math.max(6, Math.floor(estRowHeight * 0.35)));
 
-      for (let i = 1; i <= totalSoal; i++) {
-        let isRight = i > half;
-        let rIdx = isRight ? (i - half - 1) : (i - 1);
-        
-        let cy = gridTop + (rIdx + 0.5) * rowHeight + manualOffsetY;
+  for (let i = 1; i <= totalSoal; i++) {
+    let isRight = i > half;
+    let rIdx = isRight ? (i - half - 1) : (i - 1);
+    let estY = gridTopEst + (rIdx + 0.5) * estRowHeight + manualOffsetY;
+    let currentXArr = isRight ? rightXBase : leftXBase;
 
-        let rowAvgs = [];
-        let rowPoints = [];
+    let rowBlackRatios = [];
 
-        for (let oIdx = 0; oIdx < 5; oIdx++) {
-          let cx = (isRight ? rightX[oIdx] : leftX[oIdx]) + manualOffsetX;
-
-          let avgGray = hitungRataRataGrayscaleCirc(pixels, w, h, cx, cy, radius);
-          rowAvgs.push(avgGray);
-          rowPoints.push({ x: cx, y: cy, opt: options[oIdx], avg: avgGray });
-        }
-
-        let minAvg = Math.min(...rowAvgs);
-        let minIdx = rowAvgs.indexOf(minAvg);
-
-        let otherSum = 0;
-        for (let r = 0; r < 5; r++) { if (r !== minIdx) otherSum += rowAvgs[r]; }
-        let otherAvg = otherSum / 4;
-
-        let delta = otherAvg - minAvg;
-
-        // Toleransi pembacaan: delta perbedaan kehitaman minimal 16 poin
-        let isChosen = (delta >= 16) && (minAvg < 185);
-        let chosenOpt = isChosen ? options[minIdx] : '-';
-
-        answers.push(chosenOpt);
-
-        for (let r = 0; r < 5; r++) {
-          samplingPoints.push({
-            x: rowPoints[r].x,
-            y: rowPoints[r].y,
-            radius: radius,
-            isSelected: (isChosen && r === minIdx)
-          });
-        }
-      }
-
-      return { answers, samplingPoints };
+    for (let oIdx = 0; oIdx < 5; oIdx++) {
+      let cx = currentXArr[oIdx] + manualOffsetX;
+      // Hitung rasio piksel gelap/hitam (0.0 - 1.0)
+      let blackRatio = hitungRasioPikselHitam(pixels, w, h, cx, estY, radius);
+      rowBlackRatios.push(blackRatio);
     }
 
-    function hitungRataRataGrayscaleCirc(pixels, imgW, imgH, cx, cy, radius) {
-      let sum = 0, count = 0;
-      let cxInt = Math.round(cx);
-      let cyInt = Math.round(cy);
+    let maxRatio = Math.max(...rowBlackRatios);
+    let maxIdx = rowBlackRatios.indexOf(maxRatio);
 
-      for (let rx = -radius; rx <= radius; rx++) {
-        for (let ry = -radius; ry <= radius; ry++) {
-          if (rx * rx + ry * ry <= radius * radius) {
-            let px = cxInt + rx;
-            let py = cyInt + ry;
-            if (px >= 0 && px < imgW && py >= 0 && py < imgH) {
-              let idx = (py * imgW + px) * 4;
-              let gray = pixels[idx] * 0.299 + pixels[idx+1] * 0.587 + pixels[idx+2] * 0.114;
-              sum += gray;
-              count++;
-            }
-          }
+    let otherSum = 0;
+    for (let r = 0; r < 5; r++) { if (r !== maxIdx) otherSum += rowBlackRatios[r]; }
+    let otherAvg = otherSum / 4;
+
+    // Jawaban terdeteksi jika bulatan terhitam memiliki kepadatan piksel jauh lebih tinggi dari bulatan lain
+    let isChosen = (maxRatio >= 0.42) && ((maxRatio - otherAvg) >= 0.20);
+    let chosenOpt = isChosen ? options[maxIdx] : '-';
+
+    answers.push(chosenOpt);
+
+    for (let r = 0; r < 5; r++) {
+      samplingPoints.push({
+        x: currentXArr[r] + manualOffsetX,
+        y: estY,
+        radius: radius,
+        isSelected: (isChosen && r === maxIdx)
+      });
+    }
+  }
+
+  return { answers, samplingPoints };
+}
+
+// HELPER: HITUNG PERSENTASE PIKSEL GELAP (GRAYSCALE < 130)
+function hitungRasioPikselHitam(pixels, imgW, imgH, cx, cy, radius) {
+  let blackCount = 0, totalCount = 0;
+  let cxInt = Math.round(cx);
+  let cyInt = Math.round(cy);
+
+  for (let rx = -radius; rx <= radius; rx++) {
+    for (let ry = -radius; ry <= radius; ry++) {
+      if (rx * rx + ry * ry <= radius * radius) {
+        let px = cxInt + rx;
+        let py = cyInt + ry;
+        if (px >= 0 && px < imgW && py >= 0 && py < imgH) {
+          let idx = (py * imgW + px) * 4;
+          let gray = pixels[idx] * 0.299 + pixels[idx+1] * 0.587 + pixels[idx+2] * 0.114;
+          
+          // Piksel dianggap "hitam/gelap" jika nilai grayscale di bawah 130
+          if (gray < 130) blackCount++;
+          totalCount++;
         }
       }
-      return count > 0 ? (sum / count) : 255;
     }
-
+  }
+  return totalCount > 0 ? (blackCount / totalCount) : 0;
+}
     function renderForm2Kolom(answersArray, totalSoal) {
       let colLeft = document.getElementById('colLeftJawaban');
       let colRight = document.getElementById('colRightJawaban');
