@@ -10,11 +10,10 @@
     .admin-panel { background: #ffffff; }
     .table-hover tbody tr:hover { background-color: #f1f5f9; }
     
-    /* KAMERA & OVERLAY GUIDE */
     .camera-wrapper {
       position: relative;
       width: 100%;
-      max-width: 600px;
+      max-width: 650px;
       margin: 0 auto;
       overflow: hidden;
       border-radius: 8px;
@@ -22,12 +21,12 @@
     }
     .camera-overlay {
       position: absolute;
-      top: 10%;
+      top: 5%;
       left: 5%;
       width: 90%;
-      height: 80%;
+      height: 90%;
       border: 3px dashed #0dd6b8;
-      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);
       border-radius: 6px;
       pointer-events: none;
       display: flex;
@@ -36,15 +35,14 @@
       padding-top: 8px;
     }
     .camera-overlay span {
-      background: rgba(13, 214, 184, 0.9);
+      background: rgba(13, 214, 184, 0.95);
       color: #000;
       font-weight: bold;
       font-size: 11px;
-      padding: 2px 8px;
+      padding: 3px 10px;
       border-radius: 4px;
     }
 
-    /* GRID ITEM JAWABAN 2 KOLOM (MIRROR FORMAT LJK) */
     .item-soal-box {
       background: #ffffff;
       border: 1px solid #ced4da;
@@ -104,50 +102,48 @@
             </div>
             
             <div class="d-grid gap-2 mt-4">
-              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Scan LJK (Auto-Detect OMR)</button>
+              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Scan LJK (Auto-Detect Anchor OMR)</button>
               <button id="btnManual" class="btn btn-outline-secondary" disabled onclick="bukaManual()">Input Token Darurat</button>
             </div>
           </div>
         </div>
 
-        <!-- Area Kamera dengan Bounding Guide Box -->
+        <!-- Kamera View -->
         <div id="areaKamera" class="card shadow-sm mb-4" style="display:none;">
           <div class="card-body text-center p-2">
             <div class="camera-wrapper">
               <video id="videoElement" autoplay playsinline style="width:100%; height:auto; display:block;"></video>
               <div class="camera-overlay">
-                <span>PASANGA AREA OMR (KOTAK JAWABAN) DI SINI</span>
+                <span>PASANGA SELURUH AREA KOTAK JAWABAN (OMR) DI SINI</span>
               </div>
             </div>
-            <p class="text-muted small mt-2 mb-2">Pastikan seluruh kotak AREA JAWABAN (OMR) berada di dalam garis hijau.</p>
+            <p class="text-muted small mt-2 mb-2">Pastikan 4 kotak hitam di sudut ZONA JAWABAN terlihat jelas.</p>
             <button class="btn btn-success me-2 fw-bold" onclick="ambilFotoDanScanOMR()">📷 Ambil & Auto-Scan</button>
             <button class="btn btn-danger" onclick="tutupKamera()">Batal</button>
             <canvas id="canvasElement" style="display:none;"></canvas>
           </div>
         </div>
 
-        <!-- Area Konfirmasi / Hasil Scan 2 Kolom -->
+        <!-- Review Hasil Scan -->
         <div id="areaKonfirmasi" class="card shadow-sm mb-4" style="display:none;">
           <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <h6 class="text-primary mb-0 fw-bold">Review Hasil Scan (Format Sesuai LJK)</h6>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="text-primary mb-0 fw-bold">Review Hasil Scan & Diagnostic Visual</h6>
               <span class="badge bg-info text-dark" id="badgeTotalSoal">0 Soal</span>
             </div>
 
-            <!-- Preview Foto Hasil Ambil Kamera -->
+            <!-- Canvas Diagnostic / Preview Foto dengan Titik Deteksi -->
             <div class="text-center mb-3">
-              <img id="imgPreview" src="" style="max-width:100%; max-height:220px; display:none; border-radius:6px; border:1px solid #ccc;">
+              <canvas id="diagnosticCanvas" style="max-width:100%; height:auto; border-radius:6px; border:1px solid #000;"></canvas>
+              <small class="text-muted d-block mt-1" style="font-size: 11px;">*Titik hijau/merah di atas menunjukkan posisi bulatan yang dibaca komputer.</small>
             </div>
 
-            <!-- LAYOUT JAWABAN 2 KOLOM (PERSIS LJK FISIK) -->
+            <!-- LAYOUT JAWABAN 2 KOLOM -->
             <div class="alert alert-light border mb-3 p-3">
               <small class="text-muted d-block mb-3">💡 <b>Petunjuk:</b> Urutan nomor di bawah telah disesuaikan dengan posisi LJK (Kiri & Kanan). Silakan koreksi pilihan jika ada yang perlu disesuaikan.</small>
               
               <div class="row g-2">
-                <!-- Kolom Kiri (Soal 1 s/d Half) -->
                 <div class="col-6 border-end pe-2" id="colLeftJawaban"></div>
-                
-                <!-- Kolom Kanan (Soal Half+1 s/d Total) -->
                 <div class="col-6 ps-2" id="colRightJawaban"></div>
               </div>
             </div>
@@ -326,7 +322,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
-    // URL WEB APP APPS SCRIPT
     const GAS_URL = "https://script.google.com/macros/s/AKfycbxO9WEDtHMmKC8S8xHLMhV-6qfxd7dxPtynlDc2NE0vu9ngK06H1CNPe74hOT5_XZrr/exec";
 
     let dataGlobal = { sekolah: {}, siswa: {}, ujian: [] };
@@ -486,14 +481,14 @@
       document.getElementById('areaKamera').style.display = 'none';
     }
 
-    // ALGORITMA SCAN OMR DENGAN SAMPLING DUA KOLOM
+    // UTAMA: ALGORITMA AUTO-SCAN DENGAN BILINEAR INTERPOLATION DARI 4 ANCHOR BOX
     function ambilFotoDanScanOMR() {
       let video = document.getElementById('videoElement');
       let canvas = document.getElementById('canvasElement');
       let ctx = canvas.getContext('2d');
       
-      canvas.width = 800;
-      canvas.height = Math.round((video.videoHeight / video.videoWidth) * 800) || 1000;
+      canvas.width = 1000;
+      canvas.height = Math.round((video.videoHeight / video.videoWidth) * 1000) || 1200;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
       fotoBase64Akhir = canvas.toDataURL('image/jpeg', 0.6);
@@ -502,89 +497,167 @@
       let u_data = dataGlobal.ujian.find(x => x.id_ujian == document.getElementById('selUjian').value);
       let totalSoal = u_data ? parseInt(u_data.jml_soal) || 30 : 30;
 
-      let detectedArray = prosesOmrPiksel2Kolom(ctx, canvas.width, canvas.height, totalSoal);
+      // 1. Posisikan 4 Kotak Hitam Anchor
+      let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let anchors = cari4AnchorKotak(imgData.data, canvas.width, canvas.height);
 
-      renderForm2Kolom(detectedArray, totalSoal);
+      // 2. Lakukan Deteksi Bulatan dengan Interpolasi Koordinat Bilinear
+      let resScan = deteksiBulatanLjk(ctx, canvas.width, canvas.height, anchors, totalSoal);
+
+      // 3. Render Gambar Diagnostik (Gambar Titik Lingkaran di Foto)
+      gambarCanvasDiagnostik(canvas, anchors, resScan.samplingPoints);
+
+      // 4. Tampilkan Form 2 Kolom
+      renderForm2Kolom(resScan.answers, totalSoal);
 
       document.getElementById('areaKonfirmasi').style.display = 'block';
       document.getElementById('boxUploadDarurat').style.display = 'none';
-      document.getElementById('imgPreview').src = fotoBase64Akhir;
-      document.getElementById('imgPreview').style.display = 'inline';
 
-      tampilkanNotif("Auto-Scan Selesai!", `Sistem telah membaca ${totalSoal} soal. Silakan periksa atau sesuaikan pilihan jika diperlukan.`, "success");
+      tampilkanNotif("Auto-Scan Selesai!", `Sistem telah memindai ${totalSoal} soal secara presisi. Silakan periksa titik diagnostik dan hasil pilihan di bawah.`, "success");
     }
 
-    function prosesOmrPiksel2Kolom(ctx, width, height, totalSoal) {
-      let imgData = ctx.getImageData(0, 0, width, height);
-      let pixels = imgData.data;
+    // MENINGKATKAN DETEKSI 4 KOTAK HITAM DENGAN THRESHOLDING
+    function cari4AnchorKotak(pixels, w, h) {
+      let tl = { x: w * 0.08, y: h * 0.15 };
+      let tr = { x: w * 0.92, y: h * 0.15 };
+      let bl = { x: w * 0.08, y: h * 0.88 };
+      let br = { x: w * 0.92, y: h * 0.88 };
 
+      tl = refineAnchorCenter(pixels, w, h, tl.x, tl.y);
+      tr = refineAnchorCenter(pixels, w, h, tr.x, tr.y);
+      bl = refineAnchorCenter(pixels, w, h, bl.x, bl.y);
+      br = refineAnchorCenter(pixels, w, h, br.x, br.y);
+
+      return { tl, tr, bl, br };
+    }
+
+    function refineAnchorCenter(pixels, w, h, estX, estY) {
+      let searchBox = 80;
+      let minX = Math.max(0, Math.round(estX - searchBox));
+      let maxX = Math.min(w - 1, Math.round(estX + searchBox));
+      let minY = Math.max(0, Math.round(estY - searchBox));
+      let maxY = Math.min(h - 1, Math.round(estY + searchBox));
+
+      let sumX = 0, sumY = 0, count = 0;
+
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          let idx = (y * w + x) * 4;
+          let brightness = (pixels[idx] + pixels[idx+1] + pixels[idx+2]) / 3;
+          if (brightness < 80) { // Piksel Hitam Padat
+            sumX += x; sumY += y; count++;
+          }
+        }
+      }
+
+      if (count > 20) {
+        return { x: sumX / count, y: sumY / count };
+      }
+      return { x: estX, y: estY };
+    }
+
+    // FORMULA INTERPOLASI BILINEAR KOORDINAT MATRIKS LJK
+    function deteksiBulatanLjk(ctx, w, h, anchors, totalSoal) {
+      let pixels = ctx.getImageData(0, 0, w, h).data;
       let half = Math.ceil(totalSoal / 2);
-      let detected = [];
+      let answers = [];
+      let samplingPoints = [];
       let options = ['A', 'B', 'C', 'D', 'E'];
 
-      let startY = height * 0.15;
-      let endY = height * 0.85;
-      let omrHeight = endY - startY;
-      let rowHeight = omrHeight / half;
-
       for (let i = 1; i <= totalSoal; i++) {
-        let isRightCol = i > half;
-        let rowIndex = isRightCol ? (i - half - 1) : (i - 1);
-        let currentY = startY + (rowIndex * rowHeight) + (rowHeight / 2);
+        let isRight = i > half;
+        let rIdx = isRight ? (i - half - 1) : (i - 1);
 
-        let colStartX = isRightCol ? (width * 0.58) : (width * 0.18);
-        let colWidth = width * 0.28;
-        let optWidth = colWidth / 5;
+        let v = (rIdx + 0.5) / half; // Rasio Vertikal
 
-        let darkestOption = '-';
+        let darkestOpt = '-';
         let minBrightness = 255;
 
-        for (let oIdx = 0; oIdx < options.length; oIdx++) {
-          let currentX = colStartX + (oIdx * optWidth) + (optWidth / 2);
-          let brightness = hitungKepadatanPiksel(pixels, width, currentX, currentY);
+        for (let oIdx = 0; oIdx < 5; oIdx++) {
+          let u = 0;
+          if (!isRight) {
+            u = 0.12 + (oIdx * 0.065); // Rasio Horisontal Kolom Kiri
+          } else {
+            u = 0.58 + (oIdx * 0.065); // Rasio Horisontal Kolom Kanan
+          }
+
+          // Interpolasi Bilinear 2D
+          let pt = mapBilinear(u, v, anchors);
+          let brightness = hitungPikselLingkaran(pixels, w, pt.x, pt.y);
+
+          samplingPoints.push({ x: pt.x, y: pt.y, opt: options[oIdx], num: i, b: brightness });
 
           if (brightness < minBrightness) {
             minBrightness = brightness;
-            darkestOption = options[oIdx];
+            darkestOpt = options[oIdx];
           }
         }
 
-        if (minBrightness < 165) {
-          detected.push(darkestOption);
+        if (minBrightness < 160) {
+          answers.push(darkestOpt);
         } else {
-          detected.push('-');
+          answers.push('-');
         }
       }
 
-      return detected;
+      return { answers, samplingPoints };
     }
 
-    function hitungKepadatanPiksel(pixels, width, centerX, centerY) {
-      let totalBrightness = 0;
-      let count = 0;
-      let radius = 5;
+    function mapBilinear(u, v, a) {
+      let x = (1-u)*(1-v)*a.tl.x + u*(1-v)*a.tr.x + (1-u)*v*a.bl.x + u*v*a.br.x;
+      let y = (1-u)*(1-v)*a.tl.y + u*(1-v)*a.tr.y + (1-u)*v*a.bl.y + u*v*a.br.y;
+      return { x, y };
+    }
 
-      for (let rx = -radius; rx <= radius; rx++) {
-        for (let ry = -radius; ry <= radius; ry++) {
-          let px = Math.round(centerX + rx);
-          let py = Math.round(centerY + ry);
-          let index = (py * width + px) * 4;
-
-          let r = pixels[index] || 255;
-          let g = pixels[index + 1] || 255;
-          let b = pixels[index + 2] || 255;
-          let avg = (r + g + b) / 3;
-
-          totalBrightness += avg;
-          count++;
+    function hitungPikselLingkaran(pixels, w, cx, cy) {
+      let totalB = 0, count = 0;
+      let r = 6;
+      for (let rx = -r; rx <= r; rx++) {
+        for (let ry = -r; ry <= r; ry++) {
+          let px = Math.round(cx + rx);
+          let py = Math.round(cy + ry);
+          let idx = (py * w + px) * 4;
+          let b = (pixels[idx] + pixels[idx+1] + pixels[idx+2]) / 3;
+          totalB += b; count++;
         }
       }
-
-      return totalBrightness / count;
+      return totalB / count;
     }
 
-    // RENDER PEMBAGIAN 2 KOLOM (KIRI: 1..15, KANAN: 16..30)
-    function renderForm2Kolom(detectedArray, totalSoal) {
+    // GAMBAR BUKTI DIAGNOSTIK TITIK SAMPLING PADA FOTO LJK
+    function gambarCanvasDiagnostik(srcCanvas, anchors, points) {
+      let diagCanvas = document.getElementById('diagnosticCanvas');
+      diagCanvas.width = srcCanvas.width;
+      diagCanvas.height = srcCanvas.height;
+      let dCtx = diagCanvas.getContext('2d');
+
+      dCtx.drawImage(srcCanvas, 0, 0);
+
+      // Gambar Garis Bingkai Anchor (Warna Biru)
+      dCtx.strokeStyle = '#00a8ff';
+      dCtx.lineWidth = 3;
+      dCtx.beginPath();
+      dCtx.moveTo(anchors.tl.x, anchors.tl.y);
+      dCtx.lineTo(anchors.tr.x, anchors.tr.y);
+      dCtx.lineTo(anchors.br.x, anchors.br.y);
+      dCtx.lineTo(anchors.bl.x, anchors.bl.y);
+      dCtx.closePath();
+      dCtx.stroke();
+
+      // Gambar Titik Sampling (Hijau jika Hitam/Terpilih, Merah jika Kosong)
+      points.forEach(p => {
+        dCtx.beginPath();
+        dCtx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+        if (p.b < 160) {
+          dCtx.fillStyle = '#00ff2b'; // Terbaca Hitam (Pilihan)
+        } else {
+          dCtx.fillStyle = 'rgba(255, 0, 0, 0.4)'; // Kosong/Putih
+        }
+        dCtx.fill();
+      });
+    }
+
+    function renderForm2Kolom(answersArray, totalSoal) {
       let colLeft = document.getElementById('colLeftJawaban');
       let colRight = document.getElementById('colRightJawaban');
       
@@ -595,7 +668,7 @@
       let half = Math.ceil(totalSoal / 2);
 
       for (let i = 1; i <= totalSoal; i++) {
-        let valDetect = detectedArray[i - 1] || '-';
+        let valDetect = answersArray[i - 1] || '-';
         
         let htmlBox = `
           <div class="item-soal-box">
@@ -641,7 +714,6 @@
         renderForm2Kolom(emptyArray, totalSoal);
 
         document.getElementById('areaKonfirmasi').style.display = 'block';
-        document.getElementById('imgPreview').style.display = 'none';
         document.getElementById('boxUploadDarurat').style.display = 'block';
         tampilkanNotif("Token Valid", "Silakan pilih jawaban per nomor soal pada kolom 1 & 2 di bawah.", "success");
       } else { 
