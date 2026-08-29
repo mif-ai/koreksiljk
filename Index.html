@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Asesmen OMR Digital - SMAN 1 Karangbinangun</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .admin-panel { background: #ffffff; }
+    .table-hover tbody tr:hover { background-color: #f1f5f9; }
+    #modalNotifikasi .modal-header.bg-success { background-color: #198754 !important; }
+    #modalNotifikasi .modal-header.bg-danger { background-color: #dc3545 !important; }
+    #modalNotifikasi .modal-header.bg-warning { background-color: #ffc107 !important; color: #000 !important; }
+    #modalNotifikasi .modal-header.bg-info { background-color: #0dcaf3 !important; color: #000 !important; }
+  </style>
+</head>
+<body>
+
+  <div id="app-container">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+      <div class="container">
+        <span class="navbar-brand mb-0 h1">SMAN 1 Karangbinangun OMR</span>
+        <div>
+          <button class="btn btn-sm btn-light me-2" onclick="switchView('siswa')">Portal Siswa</button>
+          <button class="btn btn-sm btn-outline-light" onclick="switchView('login')">Admin Guru</button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container mt-4" id="app">
+      
+      <!-- VIEW: PORTAL SISWA -->
+      <div id="view-siswa">
+        <div class="card shadow-sm mb-4 border-0">
+          <div class="card-header bg-white">
+            <h5 class="mb-0 text-primary">Formulir Pengumpulan LJK</h5>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-bold">Kelas / Rombel</label>
+              <select id="selKelas" class="form-select" onchange="loadNamaSiswa()"><option value="">Memuat data...</option></select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Nama Siswa</label>
+              <select id="selNama" class="form-select" disabled><option value="">-- Pilih Nama --</option></select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Mata Pelajaran & Ujian Aktif</label>
+              <select id="selUjian" class="form-select" disabled><option value="">-- Pilih Ujian Aktif --</option></select>
+            </div>
+            
+            <div class="d-grid gap-2 mt-4">
+              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Scan LJK (Kamera Nativ)</button>
+              <button id="btnManual" class="btn btn-outline-secondary" disabled onclick="bukaManual()">Input Token Darurat</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Kamera Area -->
+        <div id="areaKamera" class="card shadow-sm mb-4" style="display:none;">
+          <div class="card-body text-center">
+            <video id="videoElement" autoplay playsinline style="width:100%; border-radius:8px; background:#000;"></video>
+            <p class="text-muted small mt-2">Arahkan kamera ke kertas LJK.</p>
+            <button class="btn btn-success me-2" onclick="ambilFoto()">Ambil Gambar</button>
+            <button class="btn btn-danger" onclick="tutupKamera()">Batal</button>
+            <canvas id="canvasElement" style="display:none;"></canvas>
+          </div>
+        </div>
+
+        <!-- Konfirmasi Area -->
+        <div id="areaKonfirmasi" class="card shadow-sm mb-4" style="display:none;">
+          <div class="card-body">
+            <h6 class="text-primary">Preview Jawaban</h6>
+            <input type="text" id="inputJawaban" class="form-control mb-3" placeholder="Contoh: A,B,C,D,A...">
+            <small class="text-muted d-block mb-3">*Gunakan huruf kapital dipisah koma.</small>
+            <img id="imgPreview" src="" style="max-width:100%; display:none; margin-bottom:15px; border-radius:8px;">
+            <div class="mb-3" id="boxUploadDarurat" style="display:none;">
+              <label class="form-label text-danger">Upload Foto LJK Fisik (Wajib):</label>
+              <input type="file" id="fileManual" accept="image/*" class="form-control">
+            </div>
+            <button class="btn btn-success w-100" id="btnKirim" onclick="kirimData()">Kirim Jawaban Final</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: LOGIN GURU -->
+      <div id="view-login" style="display:none; max-width: 400px; margin: auto;">
+        <div class="card shadow-sm border-0">
+          <div class="card-body text-center p-5">
+            <h5 class="mb-4 text-primary">Akses Guru</h5>
+            <input type="password" id="txtPassword" class="form-control mb-3 text-center" placeholder="Masukkan Password">
+            <button class="btn btn-primary w-100" onclick="prosesLogin()">Masuk Dashboard</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: DASHBOARD GURU -->
+      <div id="view-admin" style="display:none;">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <h4 class="text-primary m-0">Panel Administrator</h4>
+          <div>
+            <button class="btn btn-sm btn-outline-primary me-2" onclick="refreshDataAdmin()">🔄 Refresh Data</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="switchView('siswa')">Logout</button>
+          </div>
+        </div>
+        
+        <ul class="nav nav-pills mb-4">
+          <li class="nav-item"><a class="nav-link active" id="tab1" href="javascript:void(0);" onclick="switchAdminTab(1)">Audit & Nilai</a></li>
+          <li class="nav-item"><a class="nav-link" id="tab2" href="javascript:void(0);" onclick="switchAdminTab(2)">Manajemen Ujian & Cetak LJK</a></li>
+          <li class="nav-item"><a class="nav-link" id="tab3" href="javascript:void(0);" onclick="switchAdminTab(3)">Identitas Sekolah</a></li>
+        </ul>
+
+        <!-- Tab 1 -->
+        <div id="admin-tab-1" class="admin-panel border rounded p-3 bg-white shadow-sm">
+          <h6 class="text-muted mb-3">Daftar Hasil Ujian Masuk</h6>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr><th>Kelas</th><th>Nama</th><th>Mapel</th><th>Skor</th><th>Aksi</th></tr>
+              </thead>
+              <tbody id="tbAudit"><tr><td colspan="5" class="text-center">Memuat data...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2 -->
+        <div id="admin-tab-2" class="admin-panel border rounded p-4 bg-white shadow-sm" style="display:none;">
+          <div class="row">
+            <div class="col-md-5 border-end pe-4">
+              <h6 class="text-primary mb-3" id="formUjianTitle">Buat Ujian Baru</h6>
+              <input type="hidden" id="editIdUjian">
+              <div class="mb-2"><label class="form-label small">Mata Pelajaran</label>
+                <input type="text" id="ujMapel" class="form-control form-control-sm" placeholder="Cth: Biologi"></div>
+              <div class="mb-2">
+                <label class="form-label small fw-bold">Kelas Target (Bisa pilih > 1)</label>
+                <select id="ujKelas" class="form-select form-select-sm" multiple style="height: 90px;"></select>
+                <small class="text-muted" style="font-size: 10px;">*Tahan Ctrl/Cmd untuk pilih banyak</small>
+              </div>
+              <div class="mb-2"><label class="form-label small">Materi / Bab</label>
+                <input type="text" id="ujMateri" class="form-control form-control-sm" placeholder="Cth: Ekosistem"></div>
+              <div class="mb-2"><label class="form-label small">Jumlah Soal</label>
+                <input type="number" id="ujJumlah" class="form-control form-control-sm" placeholder="Cth: 20"></div>
+              <div class="mb-3"><label class="form-label small">Kunci Jawaban</label>
+                <input type="text" id="ujKunci" class="form-control form-control-sm" placeholder="A,B,C,D,E...">
+                <small class="text-muted" style="font-size:11px;">*Pisahkan dengan koma</small>
+              </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary btn-sm w-100" id="btnSimpanUjian" onclick="simpanUjianAdmin()">Simpan Ujian</button>
+                <button class="btn btn-secondary btn-sm" id="btnBatalEdit" style="display:none;" onclick="resetFormUjian()">Batal</button>
+              </div>
+            </div>
+            
+            <div class="col-md-7 ps-4">
+              <h6 class="text-primary mb-3">Daftar Seluruh Ujian (Manajemen CRUD)</h6>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle text-center" style="font-size: 13px;">
+                  <thead class="table-light"><tr><th>Ujian / Kelas</th><th>Status</th><th>Token</th><th>Aksi</th></tr></thead>
+                  <tbody id="tbUjianAdmin"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3 -->
+        <div id="admin-tab-3" class="admin-panel border rounded p-4 bg-white shadow-sm" style="display:none; max-width:500px;">
+          <h6 class="text-primary mb-3">Pengaturan Header LJK</h6>
+          <div class="mb-2"><label class="form-label small">Kop Dinas</label><input type="text" id="setKop" class="form-control form-control-sm"></div>
+          <div class="mb-2"><label class="form-label small">Nama Sekolah</label><input type="text" id="setNamaSekolah" class="form-control form-control-sm"></div>
+          <div class="mb-2"><label class="form-label small">Tahun Pelajaran</label><input type="text" id="setTahun" class="form-control form-control-sm"></div>
+          <button class="btn btn-success mt-3 w-100" onclick="simpanPengaturanAdmin()">Simpan Pengaturan</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DOWNLOAD PDF LJK -->
+  <div class="modal fade" id="modalCetakLJK" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title">📥 Download PDF LJK Personalisasi</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="cetakIdUjian">
+          <div class="alert alert-info py-2" id="cetakInfoUjian"></div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold">Target Personalisasi LJK</label>
+            <select id="cetakMode" class="form-select" onchange="onChangeModeCetak()">
+              <option value="semua">Download Seluruh Siswa (Semua Kelas Target)</option>
+              <option value="kelas">Download Per Kelas Tertentu</option>
+              <option value="siswa">Download Siswa Tertentu (Pilih Satuan)</option>
+            </select>
+          </div>
+
+          <div class="mb-3" id="boxCetakKelas" style="display:none;">
+            <label class="form-label fw-bold">Pilih Kelas Filter</label>
+            <select id="cetakSelKelas" class="form-select" onchange="onChangeCetakKelas()">
+              <option value="">-- Pilih Kelas --</option>
+            </select>
+          </div>
+
+          <div class="mb-3" id="boxCetakSiswa" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label fw-bold mb-0">Daftar Siswa</label>
+              <div>
+                <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="toggleCheckSemuaSiswa(true)">Pilih Semua</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="toggleCheckSemuaSiswa(false)">Hapus Semua</button>
+              </div>
+            </div>
+            <div id="listCetakSiswa" class="border rounded p-3 bg-light" style="max-height: 220px; overflow-y: auto;">
+              <em class="text-muted">Pilih kelas terlebih dahulu.</em>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" id="btnProsesCetak" class="btn btn-success fw-bold" onclick="eksekusiCetakLJK()">📥 Download PDF LJK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL NOTIFIKASI POPUP -->
+  <div class="modal fade" id="modalNotifikasi" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header text-white" id="notifHeaderBg">
+          <h5 class="modal-title d-flex align-items-center" id="notifTitle">
+            <span id="notifIcon" class="me-2 fs-5">🔔</span> Notifikasi
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4 text-dark" id="notifMessage"></div>
+        <div class="modal-footer bg-light py-2">
+          <button type="button" class="btn btn-secondary btn-sm px-4" data-bs-dismiss="modal">Tutup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // URL WEB APP APPS SCRIPT ANDA
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbxO9WEDtHMmKC8S8xHLMhV-6qfxd7dxPtynlDc2NE0vu9ngK06H1CNPe74hOT5_XZrr/exec";
+
+    let dataGlobal = { sekolah: {}, siswa: {}, ujian: [] };
+    let streamKamera = null; let fotoBase64Akhir = null; let metodeInput = "Scan Kamera";
+
+    // JEMBATAN API FETCH KE GOOGLE APPS SCRIPT
+    function callApi(actionName, payloadData, onSuccess, onError) {
+      fetch(GAS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: actionName, payload: payloadData })
+      })
+      .then(res => res.json())
+      .then(data => { if (onSuccess) onSuccess(data); })
+      .catch(err => {
+        console.error("API Error:", err);
+        if (onError) onError(err);
+        else tampilkanNotif("Koneksi Terputus", "Gagal menghubungi server Apps Script: " + err.message, "error");
+      });
+    }
+
+    function tampilkanNotif(judul, pesan, tipe = 'info') {
+      let headerBg = document.getElementById('notifHeaderBg');
+      let titleEl = document.getElementById('notifTitle');
+      let messageEl = document.getElementById('notifMessage');
+      let iconEl = document.getElementById('notifIcon');
+
+      if (!headerBg) { alert(judul + "\n\n" + pesan); return; }
+
+      headerBg.className = "modal-header text-white";
+      if (tipe === 'success') { headerBg.classList.add('bg-success'); iconEl.innerText = '✅'; }
+      else if (tipe === 'error') { headerBg.classList.add('bg-danger'); iconEl.innerText = '❌'; }
+      else if (tipe === 'warning') { headerBg.classList.add('bg-warning', 'text-dark'); iconEl.innerText = '⚠️'; }
+      else { headerBg.classList.add('bg-info', 'text-dark'); iconEl.innerText = 'ℹ️'; }
+
+      titleEl.childNodes[1].nodeValue = " " + judul;
+      messageEl.innerHTML = pesan;
+
+      let modalEl = document.getElementById('modalNotifikasi');
+      let modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modalInstance.show();
+    }
+
+    window.onload = function() {
+      switchView('siswa');
+      muatDataSistem();
+    }
+
+    function muatDataSistem() {
+      callApi('getInitData', {}, res => renderAllUI(res));
+    }
+
+    function renderAllUI(res) {
+      try {
+        if(!res || res.status === "error") {
+          tampilkanNotif("Gagal Memuat Data", "Spreadsheet error: " + (res ? res.pesan : "Kosong"), "error");
+          return;
+        }
+        dataGlobal = res;
+
+        isiDropdownKelasSiswa();
+
+        let sek = res.sekolah || {};
+        if(document.getElementById('setKop')) document.getElementById('setKop').value = sek['Kop_Dinas'] || sek['Kop Dinas'] || '';
+        if(document.getElementById('setNamaSekolah')) document.getElementById('setNamaSekolah').value = sek['Nama_Sekolah'] || sek['Nama Sekolah'] || '';
+        if(document.getElementById('setTahun')) document.getElementById('setTahun').value = sek['Tahun_Pelajaran'] || sek['Tahun Pelajaran'] || '';
+
+        let selKls = document.getElementById('ujKelas');
+        if(selKls) {
+          selKls.innerHTML = '';
+          let kelasAdminUrut = res.siswa ? Object.keys(res.siswa).sort() : [];
+          if(kelasAdminUrut.length === 0) selKls.innerHTML = '<option value="" disabled>Data Siswa Kosong!</option>';
+          else kelasAdminUrut.forEach(k => { selKls.innerHTML += `<option value="${k}">${k}</option>`; });
+        }
+
+        let tbUjian = document.getElementById('tbUjianAdmin');
+        if(tbUjian) {
+          tbUjian.innerHTML = '';
+          if(!res.ujian || res.ujian.length === 0) {
+            tbUjian.innerHTML = '<tr><td colspan="4" class="text-muted p-3">Belum ada ujian dibuat.</td></tr>';
+          } else {
+            res.ujian.forEach(u => {
+              let badgeStatus = u.status === "Aktif" ? '<span class="badge bg-success">Aktif</span>' : '<span class="badge bg-secondary">Tutup</span>';
+              let btnStatusText = u.status === "Aktif" ? 'Tutup' : 'Aktifkan';
+              let btnStatusClass = u.status === "Aktif" ? 'btn-outline-warning' : 'btn-outline-success';
+
+              tbUjian.innerHTML += `<tr>
+                <td class="text-start">
+                  <div class="fw-bold text-primary">${u.mapel} <span class="text-dark">(${u.materi})</span></div>
+                  <small class="text-muted">Kelas: <b>${u.kelas}</b> | Jml Soal: <b>${u.jml_soal}</b></small><br>
+                  <small class="text-secondary">Token Scan: <b>${u.token_scan}</b> | Manual: <b>${u.token_manual}</b></small>
+                </td>
+                <td>${badgeStatus}</td>
+                <td><button class="btn btn-sm btn-success mb-1" onclick="bukaModalCetak('${u.id_ujian}')">📥 Download PDF</button></td>
+                <td>
+                  <div class="btn-group-vertical btn-group-sm">
+                    <button class="btn btn-sm ${btnStatusClass} py-0 mb-1" onclick="toggleStatus('${u.id_ujian}')">${btnStatusText}</button>
+                    <button class="btn btn-sm btn-outline-primary py-0 mb-1" onclick="editUjian('${u.id_ujian}')">Edit</button>
+                    <button class="btn btn-sm btn-outline-danger py-0" onclick="hapusUjianAdmin('${u.id_ujian}')">Hapus</button>
+                  </div>
+                </td>
+              </tr>`;
+            });
+          }
+        }
+      } catch(err) { tampilkanNotif("Error Tampilan", err.message, "error"); }
+    }
+
+    function switchView(viewId) {
+      ['siswa', 'login', 'admin'].forEach(id => document.getElementById('view-' + id).style.display = 'none');
+      document.getElementById('view-' + viewId).style.display = 'block';
+    }
+
+    function isiDropdownKelasSiswa() {
+      let sel = document.getElementById('selKelas');
+      if(!sel) return;
+      sel.innerHTML = '<option value="">-- Pilih Kelas --</option>';
+      let kelasUnikUrut = dataGlobal.siswa ? Object.keys(dataGlobal.siswa).sort() : [];
+      if(kelasUnikUrut.length === 0) return;
+      kelasUnikUrut.forEach(kls => { sel.innerHTML += `<option value="${kls}">${kls}</option>`; });
+    }
+
+    function loadNamaSiswa() {
+      let kls = document.getElementById('selKelas').value;
+      let selNama = document.getElementById('selNama');
+      let selUjian = document.getElementById('selUjian');
+      selNama.innerHTML = '<option value="">-- Pilih Nama --</option>';
+      if(kls && dataGlobal.siswa[kls]) {
+        selNama.disabled = false; selUjian.disabled = false;
+        let siswaUrut = [...dataGlobal.siswa[kls]].sort((a, b) => a.nama.localeCompare(b.nama));
+        siswaUrut.forEach(s => { selNama.innerHTML += `<option value="${s.nama}" data-jk="${s.jk}">${s.nama}</option>`; });
+        
+        selUjian.innerHTML = '<option value="">-- Pilih Ujian Aktif --</option>';
+        let ujianUrut = (dataGlobal.ujian || []).filter(u => u.status === "Aktif" && (u.kelas.includes(kls) || u.kelas.includes("Semua Kelas") || u.kelas === ""));
+        ujianUrut.forEach(u => { selUjian.innerHTML += `<option value="${u.id_ujian}">${u.mapel} - ${u.materi}</option>`; });
+        
+        document.getElementById('btnScan').disabled = false; document.getElementById('btnManual').disabled = false;
+      } else {
+        selNama.disabled = true; selUjian.disabled = true;
+        document.getElementById('btnScan').disabled = true; document.getElementById('btnManual').disabled = true;
+      }
+    }
+
+    // NATIVE KAMERA ACCESS (100% BEBAS IFRAME DI GITHUB PAGES)
+    function bukaKamera() {
+      document.getElementById('areaKamera').style.display = 'block';
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(stream => {
+          streamKamera = stream; 
+          document.getElementById('videoElement').srcObject = stream;
+        })
+        .catch(err => {
+          tampilkanNotif("Izin Kamera Ditolak", "Browser memblokir kamera. Silakan izinkan akses kamera pada ikon gembok bilah alamat URL browser Anda.", "warning");
+        });
+    }
+
+    function tutupKamera() {
+      if(streamKamera) streamKamera.getTracks().forEach(t => t.stop());
+      document.getElementById('areaKamera').style.display = 'none';
+    }
+
+    function ambilFoto() {
+      let video = document.getElementById('videoElement');
+      let canvas = document.getElementById('canvasElement');
+      let ctx = canvas.getContext('2d');
+      canvas.width = 800; canvas.height = (video.videoHeight / video.videoWidth) * 800;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      fotoBase64Akhir = canvas.toDataURL('image/jpeg', 0.6);
+      tutupKamera();
+      
+      document.getElementById('areaKonfirmasi').style.display = 'block';
+      document.getElementById('boxUploadDarurat').style.display = 'none';
+      document.getElementById('imgPreview').src = fotoBase64Akhir;
+      document.getElementById('imgPreview').style.display = 'inline';
+      tampilkanNotif("Foto Berhasil Diambil", "Silakan ketik konfirmasi jawaban lalu klik Kirim Jawaban Final.", "success");
+    }
+
+    function bukaManual() {
+      let token = prompt("Masukkan Token Darurat dari Guru:");
+      if (!token) return;
+      let valid = dataGlobal.ujian.find(u => u.id_ujian == document.getElementById('selUjian').value && String(u.token_manual) === String(token));
+      if(valid) {
+        metodeInput = "Manual Token";
+        document.getElementById('areaKonfirmasi').style.display = 'block';
+        document.getElementById('imgPreview').style.display = 'none';
+        document.getElementById('boxUploadDarurat').style.display = 'block';
+        tampilkanNotif("Token Valid", "Silakan isi urutan jawaban dan unggah foto LJK Anda.", "success");
+      } else { tampilkanNotif("Token Salah", "Token darurat tidak valid!", "error"); }
+    }
+
+    function kirimData() {
+      let btn = document.getElementById('btnKirim'); btn.innerHTML = "Memproses..."; btn.disabled = true;
+      let u_data = dataGlobal.ujian.find(x => x.id_ujian == document.getElementById('selUjian').value);
+      
+      let payload = {
+        id_ujian: u_data.id_ujian, mapel: u_data.mapel, materi: u_data.materi, kelas: document.getElementById('selKelas').value,
+        nama: document.getElementById('selNama').value, jk: document.getElementById('selNama').options[document.getElementById('selNama').selectedIndex].getAttribute('data-jk'),
+        jawaban: document.getElementById('inputJawaban').value, metode: metodeInput, fotoBase64: fotoBase64Akhir
+      };
+
+      if(metodeInput == "Manual Token") {
+        let file = document.getElementById('fileManual').files[0];
+        if(!file) { tampilkanNotif("Wajib Upload Foto", "Pilih foto LJK fisik Anda!", "warning"); btn.innerHTML = "Kirim Jawaban Final"; btn.disabled = false; return; }
+        let reader = new FileReader();
+        reader.onload = e => { payload.fotoBase64 = e.target.result; eksekusiKirim(payload); };
+        reader.readAsDataURL(file);
+      } else { eksekusiKirim(payload); }
+    }
+
+    function eksekusiKirim(payload) {
+      callApi('submitJawaban', payload, res => {
+        if(res.status == "sukses") {
+          tampilkanNotif("Pengiriman Berhasil!", `Selamat <b>${res.nama}</b>!<br>Skor Akhir Anda: <h3 class="text-success mt-2">${res.skor}</h3>`, "success");
+          setTimeout(() => { window.location.reload(); }, 3500);
+        } else {
+          tampilkanNotif("Pengiriman Gagal", res.pesan, "error");
+          document.getElementById('btnKirim').innerHTML = "Kirim Jawaban Final"; document.getElementById('btnKirim').disabled = false;
+        }
+      });
+    }
+
+    function prosesLogin() {
+      let pass = document.getElementById('txtPassword').value;
+      callApi('verifikasiLogin', { password: pass }, res => {
+        if(res.valid) {
+          switchView('admin'); refreshDataAdmin();
+          tampilkanNotif("Login Berhasil", "Selamat datang di Panel Admin.", "success");
+        } else { tampilkanNotif("Akses Ditolak", "Password salah!", "error"); }
+      });
+    }
+
+    function switchAdminTab(tabNum) {
+      [1,2,3].forEach(i => {
+        document.getElementById('admin-tab-'+i).style.display = 'none';
+        document.getElementById('tab'+i).classList.remove('active');
+      });
+      document.getElementById('admin-tab-'+tabNum).style.display = 'block';
+      document.getElementById('tab'+tabNum).classList.add('active');
+    }
+
+    function refreshDataAdmin() {
+      callApi('getAuditData', {}, res => {
+        let tb = document.getElementById('tbAudit'); tb.innerHTML = '';
+        if(!res.data || res.data.length === 0) {
+          tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Belum ada nilai.</td></tr>';
+          return;
+        }
+        res.data.forEach(d => {
+          tb.innerHTML += `<tr><td>${d.kelas}</td><td>${d.nama}</td><td>${d.mapel}</td>
+          <td><strong>${d.skor}</strong></td><td><a href="${d.link_foto}" target="_blank" class="btn btn-sm btn-info">Foto</a>
+          <button onclick="hapusNilai(${d.row}, '${d.file_id}')" class="btn btn-sm btn-danger">Hapus</button></td></tr>`;
+        });
+      });
+
+      callApi('getInitData', {}, res => renderAllUI(res));
+    }
+
+    function hapusNilai(row, fileId) {
+      if(confirm("Hapus data nilai ini secara permanen?")) {
+        callApi('hapusDataNilai', { row: row, fileId: fileId }, res => {
+          tampilkanNotif("Dihapus", "Data berhasil dihapus.", "success");
+          refreshDataAdmin();
+        });
+      }
+    }
+
+    function simpanPengaturanAdmin() {
+      let payload = {
+        'Kop_Dinas': document.getElementById('setKop').value,
+        'Nama_Sekolah': document.getElementById('setNamaSekolah').value,
+        'Tahun_Pelajaran': document.getElementById('setTahun').value
+      };
+      callApi('simpanPengaturanSekolah', payload, res => {
+        tampilkanNotif("Identitas Tersimpan", "Pengaturan sekolah diperbarui di Spreadsheet!", "success");
+        refreshDataAdmin();
+      });
+    }
+
+    function simpanUjianAdmin() {
+      let editId = document.getElementById('editIdUjian').value;
+      let selKls = document.getElementById('ujKelas');
+      let selectedKelas = Array.from(selKls.selectedOptions).map(opt => opt.value);
+      if(selectedKelas.length === 0) { tampilkanNotif("Kelas Kosong", "Pilih kelas target!", "warning"); return; }
+
+      let payload = {
+        id_ujian: editId, mapel: document.getElementById('ujMapel').value, kelas: selectedKelas.join(", "),
+        materi: document.getElementById('ujMateri').value, jml_soal: document.getElementById('ujJumlah').value,
+        kunci: document.getElementById('ujKunci').value.toUpperCase()
+      };
+      if(!payload.mapel || !payload.kunci) { tampilkanNotif("Form Tidak Lengkap", "Mapel & Kunci wajib diisi!", "warning"); return; }
+
+      let action = editId ? 'updateUjian' : 'buatUjianBaru';
+      callApi(action, payload, res => {
+        tampilkanNotif("Sukses", "Data ujian berhasil disimpan!", "success");
+        resetFormUjian(); refreshDataAdmin();
+      });
+    }
+
+    function editUjian(idUjian) {
+      let u = dataGlobal.ujian.find(x => x.id_ujian == idUjian);
+      if(!u) return;
+      document.getElementById('editIdUjian').value = u.id_ujian;
+      document.getElementById('ujMapel').value = u.mapel;
+      document.getElementById('ujMateri').value = u.materi;
+      document.getElementById('ujJumlah').value = u.jml_soal;
+      document.getElementById('ujKunci').value = u.kunci;
+      document.getElementById('formUjianTitle').innerText = "Edit Ujian: " + u.id_ujian;
+      document.getElementById('btnSimpanUjian').innerText = "Perbarui Ujian";
+      document.getElementById('btnBatalEdit').style.display = 'inline-block';
+
+      let kelasArray = String(u.kelas || '').split(',').map(c => c.trim());
+      let selKls = document.getElementById('ujKelas');
+      for (let i = 0; i < selKls.options.length; i++) {
+        selKls.options[i].selected = kelasArray.includes(selKls.options[i].value);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetFormUjian() {
+      document.getElementById('editIdUjian').value = "";
+      document.getElementById('ujMapel').value = "";
+      document.getElementById('ujMateri').value = "";
+      document.getElementById('ujJumlah').value = "";
+      document.getElementById('ujKunci').value = "";
+      document.getElementById('formUjianTitle').innerText = "Buat Ujian Baru";
+      document.getElementById('btnSimpanUjian').innerText = "Simpan Ujian";
+      document.getElementById('btnBatalEdit').style.display = 'none';
+      let selKls = document.getElementById('ujKelas');
+      for (let i = 0; i < selKls.options.length; i++) { selKls.options[i].selected = false; }
+    }
+
+    function toggleStatus(idUjian) {
+      callApi('toggleStatusUjian', { id_ujian: idUjian }, res => { refreshDataAdmin(); });
+    }
+
+    function hapusUjianAdmin(idUjian) {
+      if(confirm("Hapus ujian ini secara permanen?")) {
+        callApi('hapusUjian', { id_ujian: idUjian }, res => {
+          tampilkanNotif("Dihapus", "Ujian berhasil dihapus.", "success");
+          refreshDataAdmin();
+        });
+      }
+    }
+
+    function bukaModalCetak(idUjian) {
+      let u = dataGlobal.ujian.find(x => x.id_ujian == idUjian);
+      if (!u) return;
+
+      document.getElementById('cetakIdUjian').value = idUjian;
+      document.getElementById('cetakInfoUjian').innerHTML = `Ujian: <strong>${u.mapel} (${u.materi})</strong> | Target: <strong>${u.kelas}</strong>`;
+      document.getElementById('cetakMode').value = "semua";
+      
+      let selKelas = document.getElementById('cetakSelKelas');
+      selKelas.innerHTML = '<option value="">-- Pilih Kelas --</option>';
+      let targetClasses = String(u.kelas || '').split(',').map(c => c.trim());
+      targetClasses.forEach(k => { if(k) selKelas.innerHTML += `<option value="${k}">${k}</option>`; });
+
+      document.getElementById('boxCetakKelas').style.display = 'none';
+      document.getElementById('boxCetakSiswa').style.display = 'none';
+
+      let modalEl = new bootstrap.Modal(document.getElementById('modalCetakLJK'));
+      modalEl.show();
+    }
+
+    function onChangeModeCetak() {
+      let mode = document.getElementById('cetakMode').value;
+      document.getElementById('boxCetakKelas').style.display = (mode === "semua") ? 'none' : 'block';
+      document.getElementById('boxCetakSiswa').style.display = (mode === "siswa") ? 'block' : 'none';
+      if(mode === "siswa") onChangeCetakKelas();
+    }
+
+    function onChangeCetakKelas() {
+      let mode = document.getElementById('cetakMode').value;
+      if (mode !== "siswa") return;
+      let kls = document.getElementById('cetakSelKelas').value;
+      let container = document.getElementById('listCetakSiswa');
+      if (!kls || !dataGlobal.siswa[kls]) { container.innerHTML = '<em class="text-muted">Pilih kelas dahulu.</em>'; return; }
+
+      let siswaList = [...dataGlobal.siswa[kls]].sort((a, b) => a.nama.localeCompare(b.nama));
+      let html = '';
+      siswaList.forEach((s, idx) => {
+        html += `<div class="form-check"><input class="form-check-input chk-siswa" type="checkbox" value="${s.nama}" id="chkSwa_${idx}" checked><label class="form-check-label" for="chkSwa_${idx}">${s.nama}</label></div>`;
+      });
+      container.innerHTML = html;
+    }
+
+    function toggleCheckSemuaSiswa(status) {
+      document.querySelectorAll('.chk-siswa').forEach(cb => cb.checked = status);
+    }
+
+    function eksekusiCetakLJK() {
+      let idUjian = document.getElementById('cetakIdUjian').value;
+      let ujian = dataGlobal.ujian.find(u => u.id_ujian == idUjian);
+      if (!ujian) return;
+
+      let mode = document.getElementById('cetakMode').value;
+      let targetSiswa = [];
+      let filterLabel = "Semua_Kelas";
+
+      if (mode === "semua") {
+        let kelasArray = String(ujian.kelas || '').split(',').map(c => c.trim());
+        kelasArray.forEach(k => {
+          if (dataGlobal.siswa && dataGlobal.siswa[k]) {
+            dataGlobal.siswa[k].forEach(s => targetSiswa.push({ ...s, kelasMap: k }));
+          }
+        });
+      } else if (mode === "kelas") {
+        let kls = document.getElementById('cetakSelKelas').value;
+        if (!kls) { tampilkanNotif("Pilih Kelas", "Pilih kelas dahulu!", "warning"); return; }
+        filterLabel = "Kelas_" + kls;
+        if (dataGlobal.siswa && dataGlobal.siswa[kls]) {
+          dataGlobal.siswa[kls].forEach(s => targetSiswa.push({ ...s, kelasMap: kls }));
+        }
+      } else if (mode === "siswa") {
+        let kls = document.getElementById('cetakSelKelas').value;
+        if (!kls) { tampilkanNotif("Pilih Kelas", "Pilih kelas dahulu!", "warning"); return; }
+        let checkedNames = Array.from(document.querySelectorAll('.chk-siswa:checked')).map(cb => cb.value);
+        filterLabel = "Pilihan_Siswa_" + kls;
+        if (dataGlobal.siswa && dataGlobal.siswa[kls]) {
+          dataGlobal.siswa[kls].forEach(s => { if (checkedNames.includes(s.nama)) targetSiswa.push({ ...s, kelasMap: kls }); });
+        }
+      }
+
+      if (targetSiswa.length === 0) { tampilkanNotif("Siswa Kosong", "Pilih minimal 1 siswa!", "warning"); return; }
+
+      let btnCetak = document.getElementById('btnProsesCetak');
+      btnCetak.innerText = "⏳ Memproses PDF..."; btnCetak.disabled = true;
+
+      callApi('generatePdfLjk', { ujian: ujian, targetSiswa: targetSiswa, filterLabel: filterLabel }, res => {
+        btnCetak.innerText = "📥 Download PDF LJK"; btnCetak.disabled = false;
+        if(res.status === "sukses") {
+          let link = document.createElement('a');
+          link.href = "data:application/pdf;base64," + res.base64;
+          link.download = res.filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          let modalEl = document.getElementById('modalCetakLJK');
+          let modalInstance = bootstrap.Modal.getInstance(modalEl);
+          if (modalInstance) modalInstance.hide();
+
+          tampilkanNotif("Download Berhasil!", `File PDF LJK A4 Landscape Berhasil Diunduh!<br>Jumlah: <b>${res.total_siswa} Siswa</b>`, "success");
+        } else { tampilkanNotif("Gagal PDF", res.pesan, "error"); }
+      });
+    }
+  </script>
+</body>
+</html>
