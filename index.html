@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Asesmen OMR Digital - SMAN 1 Karangbinangun</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- LIBRARY ARUCO AUTO-DETECTOR -->
+  <script src="https://cdn.jsdelivr.net/gh/jasonmayes/js-aruco/src/cv.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/jasonmayes/js-aruco/src/aruco.js"></script>
+
   <style>
     body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     .admin-panel { background: #ffffff; }
@@ -103,7 +108,7 @@
             </div>
             
             <div class="d-grid gap-2 mt-4">
-              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Scan LJK (Warp OMR Engine)</button>
+              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Scan LJK (Auto-ArUco OMR)</button>
               <button id="btnManual" class="btn btn-outline-secondary" disabled onclick="bukaManual()">Input Token Darurat</button>
             </div>
           </div>
@@ -122,36 +127,35 @@
           </div>
         </div>
 
-        <!-- Review Hasil Scan dengan Perspective Warp -->
+        <!-- Review Hasil Scan dengan Auto-ArUco & Perspective Warp -->
         <div id="areaKonfirmasi" class="card shadow-sm mb-4" style="display:none;">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="text-primary mb-0 fw-bold">Penyesuaian Area OMR & Live Verification</h6>
+              <h6 class="text-primary mb-0 fw-bold">Auto-ArUco Alignment & Review</h6>
               <span class="badge bg-info text-dark" id="badgeTotalSoal">0 Soal</span>
             </div>
 
-            <div class="alert alert-warning py-2 mb-2" style="font-size:12px;">
-              👈👉 <b>Petunjuk Presisi:</b> Geser <b>4 Lingkaran Hijau</b> di foto bawah agar menempel tepat di <b>4 sudut bingkai AREA JAWABAN (OMR)</b>, lalu klik <b>🔍 Scan & Pipihkan Area LJK</b>.
+            <div class="alert alert-info py-2 mb-2" id="msgArUcoStatus" style="font-size:12px;">
+              ⚡ <b>Sistem Otomatis:</b> Mencari 4 ArUco Marker pada sudut kertas...
             </div>
 
-            <!-- CANVAS INTERAKTIF DRAG CORNERS -->
+            <!-- CANVAS INTERAKTIF DRAG CORNERS (FALLBACK MANUAL) -->
             <div class="text-center mb-3">
               <div class="crop-canvas-container mb-2">
                 <canvas id="interactiveCanvas"></canvas>
               </div>
-              <button class="btn btn-primary btn-md fw-bold px-4" onclick="prosesScanWarpPerspective()">🔍 Scan & Pipihkan Area LJK</button>
+              <button class="btn btn-primary btn-md fw-bold px-4" onclick="prosesScanWarpPerspective()">🔍 Hitung / Scan Ulang Area Ini</button>
             </div>
 
             <!-- CANVAS HASIL PIPIHKAN (WARPED OMR PREVIEW) -->
             <div id="boxWarpPreview" class="text-center mb-4 p-2 bg-light border rounded" style="display:none;">
-              <small class="fw-bold text-success d-block mb-2">✅ Gambar LJK yang Dipipihkan Tegak Lurus (Live Verification):</small>
+              <small class="fw-bold text-success d-block mb-2">✅ Gambar Area LJK Dipipihkan Tegak Lurus:</small>
               <canvas id="warpedCanvas"></canvas>
-              <small class="text-muted d-block mt-1" style="font-size:11px;">*Lingkaran hijau menunjukkan bulatan yang terbaca sebagai pilihan siswa.</small>
             </div>
 
             <!-- LAYOUT JAWABAN 2 KOLOM -->
             <div class="alert alert-light border mb-3 p-3">
-              <small class="text-muted d-block mb-3">💡 <b>Review Pilihan Jawaban:</b> Hasil scan per nomor terdeteksi di bawah secara otomatis. Anda tetap dapat melakukan penyesuaian manual jika diperlukan.</small>
+              <small class="text-muted d-block mb-3">💡 <b>Review Pilihan Jawaban:</b> Hasil scan per nomor terdeteksi otomatis di bawah. Anda dapat menyesuaikan pilihan jika diperlukan.</small>
               
               <div class="row g-2">
                 <div class="col-6 border-end pe-2" id="colLeftJawaban"></div>
@@ -337,7 +341,7 @@
 
     let dataGlobal = { sekolah: {}, siswa: {}, ujian: [] };
     let streamKamera = null; 
-    let fotoBase64Akhir = null; // Menyimpan Foto Utuh Asli (Beserta Kop) untuk Google Drive
+    let fotoBase64Akhir = null; 
     let fotoImageObj = new Image();
     let metodeInput = "Scan Kamera";
 
@@ -518,20 +522,66 @@
 
       fotoImageObj = new Image();
       fotoImageObj.onload = function() {
-        cropCorners = {
-          tl: { x: canvas.width * 0.05, y: canvas.height * 0.28 },
-          tr: { x: canvas.width * 0.95, y: canvas.height * 0.28 },
-          bl: { x: canvas.width * 0.05, y: canvas.height * 0.96 },
-          br: { x: canvas.width * 0.95, y: canvas.height * 0.96 }
-        };
-
-        gambarInteractiveCanvas();
-        prosesScanWarpPerspective();
+        // Deteksi ArUco Otomatis
+        deteksiOtomatisArUcoMarker(canvas);
       };
       fotoImageObj.src = fotoBase64Akhir;
 
       document.getElementById('areaKonfirmasi').style.display = 'block';
       document.getElementById('boxUploadDarurat').style.display = 'none';
+    }
+
+    // ALGORITMA DETEKSI OTOMATIS ARUCO MARKERS DENGAN JS-ARUCO
+    function deteksiOtomatisArUcoMarker(srcCanvas) {
+      let ctx = srcCanvas.getContext('2d');
+      let imgData = ctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+
+      let detector = new AR.Detector();
+      let markers = detector.detect(imgData);
+
+      let statusMsg = document.getElementById('msgArUcoStatus');
+
+      if (markers && markers.length >= 4) {
+        // Cari Marker 4 Sudut Berdasarkan Posisi / ID
+        let foundTL = null, foundTR = null, foundBL = null, foundBR = null;
+
+        markers.forEach(m => {
+          let c = m.corners;
+          let avgX = (c[0].x + c[1].x + c[2].x + c[3].x) / 4;
+          let avgY = (c[0].y + c[1].y + c[2].y + c[3].y) / 4;
+
+          if (avgX < srcCanvas.width * 0.5 && avgY < srcCanvas.height * 0.5) foundTL = { x: avgX, y: avgY };
+          else if (avgX >= srcCanvas.width * 0.5 && avgY < srcCanvas.height * 0.5) foundTR = { x: avgX, y: avgY };
+          else if (avgX < srcCanvas.width * 0.5 && avgY >= srcCanvas.height * 0.5) foundBL = { x: avgX, y: avgY };
+          else if (avgX >= srcCanvas.width * 0.5 && avgY >= srcCanvas.height * 0.5) foundBR = { x: avgX, y: avgY };
+        });
+
+        if (foundTL && foundTR && foundBL && foundBR) {
+          cropCorners = { tl: foundTL, tr: foundTR, bl: foundBL, br: foundBR };
+          statusMsg.className = "alert alert-success py-2 mb-2";
+          statusMsg.innerHTML = "✅ <b>4 ArUco Marker Terkunci Otomatis (Akurasi Presisi)!</b> Area LJK berhasil dipipihkan otomatis.";
+        } else {
+          setFallbackCorners(srcCanvas);
+          statusMsg.className = "alert alert-warning py-2 mb-2";
+          statusMsg.innerHTML = "⚠️ <b>Sebagian Marker Terhalang:</b> Posisi awal disesuaikan. Silakan periksa titik hijau.";
+        }
+      } else {
+        setFallbackCorners(srcCanvas);
+        statusMsg.className = "alert alert-warning py-2 mb-2";
+        statusMsg.innerHTML = "⚠️ <b>Marker ArUco Kurang Jelas:</b> Silakan geser 4 lingkaran hijau pada gambar di bawah jika posisi belum pas.";
+      }
+
+      gambarInteractiveCanvas();
+      prosesScanWarpPerspective();
+    }
+
+    function setFallbackCorners(canvas) {
+      cropCorners = {
+        tl: { x: canvas.width * 0.05, y: canvas.height * 0.28 },
+        tr: { x: canvas.width * 0.95, y: canvas.height * 0.28 },
+        bl: { x: canvas.width * 0.05, y: canvas.height * 0.96 },
+        br: { x: canvas.width * 0.95, y: canvas.height * 0.96 }
+      };
     }
 
     function gambarInteractiveCanvas() {
@@ -620,7 +670,6 @@
       window.addEventListener('touchend', handleEnd);
     }
 
-    // UTAMA: TRANSFORMASE PERSPEKTIF WARP + RELATIVE CONTRAST DELTA
     function prosesScanWarpPerspective() {
       let iCanvas = document.getElementById('interactiveCanvas');
       gambarInteractiveCanvas();
@@ -628,21 +677,17 @@
       let u_data = dataGlobal.ujian.find(x => x.id_ujian == document.getElementById('selUjian').value);
       let totalSoal = u_data ? parseInt(u_data.jml_soal) || 30 : 30;
 
-      // 1. Buat Gambar Dipipihkan Tegak Lurus (800 x 1000 px)
       let dstW = 800, dstH = 1000;
       let warpedCanvas = warpPerspectiveCanvas(iCanvas, cropCorners, dstW, dstH);
 
-      // 2. Evaluasi OMR pada Gambar Dipipihkan Tegak Lurus
       let resScan = deteksiOatWarpedCanvas(warpedCanvas, totalSoal);
 
-      // 3. Tampilkan Canvas Hasil Pipihan di Layar
       let wPreviewCanvas = document.getElementById('warpedCanvas');
       wPreviewCanvas.width = dstW;
       wPreviewCanvas.height = dstH;
       let wCtx = wPreviewCanvas.getContext('2d');
       wCtx.drawImage(warpedCanvas, 0, 0);
 
-      // Draw Lingkaran Indikator Visual (Hijau = Terpilih, Merah = Kosong)
       resScan.samplingPoints.forEach(p => {
         wCtx.beginPath();
         wCtx.arc(p.x, p.y, p.radius, 0, 2 * Math.PI);
@@ -660,12 +705,9 @@
       });
 
       document.getElementById('boxWarpPreview').style.display = 'block';
-
       renderForm2Kolom(resScan.answers, totalSoal);
-      tampilkanNotif("Hasil Pemindaian Selesai!", `Area LJK berhasil dipipihkan dan ${totalSoal} soal telah dipindai dengan akurasi presisi.`, "success");
     }
 
-    // DUAL BILINEAR SAMPLING PERSPECTIVE WARP ENGINE
     function warpPerspectiveCanvas(srcCanvas, corners, dstW, dstH) {
       let dstCanvas = document.createElement('canvas');
       dstCanvas.width = dstW;
@@ -709,7 +751,6 @@
       return { x, y };
     }
 
-    // EVALUASI PERSIS GEOMETRI TATA LETAK LJK (2 KOLOM, OFFSET NOMOR, RELATIVE DELTA)
     function deteksiOatWarpedCanvas(warpedCanvas, totalSoal) {
       let w = warpedCanvas.width;
       let h = warpedCanvas.height;
@@ -721,7 +762,6 @@
       let samplingPoints = [];
       let options = ['A', 'B', 'C', 'D', 'E'];
 
-      // Zona Grid Soal pada Gambar 800 x 1000
       let gridTop = 75;
       let gridBottom = 970;
       let rowHeight = (gridBottom - gridTop) / half;
@@ -738,9 +778,9 @@
         for (let oIdx = 0; oIdx < 5; oIdx++) {
           let cx = 0;
           if (!isRight) {
-            cx = 105 + (oIdx * 40); // Posisi X A, B, C, D, E Kolom Kiri
+            cx = 105 + (oIdx * 40);
           } else {
-            cx = 505 + (oIdx * 40); // Posisi X A, B, C, D, E Kolom Kanan
+            cx = 505 + (oIdx * 40);
           }
 
           let avgGray = hitungRataRataGrayscaleCirc(pixels, w, h, cx, cy, radius);
@@ -748,7 +788,6 @@
           rowPoints.push({ x: cx, y: cy, opt: options[oIdx], avg: avgGray });
         }
 
-        // EVALUASI BEDA KONTRAS RELATIF PER BARIS (0 = PURE BLACK, 255 = PURE WHITE)
         let minAvg = Math.min(...rowAvgs);
         let minIdx = rowAvgs.indexOf(minAvg);
 
@@ -756,10 +795,9 @@
         for (let r = 0; r < 5; r++) { if (r !== minIdx) otherSum += rowAvgs[r]; }
         let otherAvg = otherSum / 4;
 
-        let delta = otherAvg - minAvg; // Beda Gelap antara Pilihan Utama vs 4 pilihan lain
+        let delta = otherAvg - minAvg;
 
-        // Kriteria Pengisian: Pilihan minimal 25 unit lebih gelap dibanding 4 bulatan lain
-        let isChosen = (delta >= 25) && (minAvg < 175);
+        let isChosen = (delta >= 22) && (minAvg < 180);
         let chosenOpt = isChosen ? options[minIdx] : '-';
 
         answers.push(chosenOpt);
