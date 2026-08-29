@@ -35,6 +35,14 @@
       border: 2px solid #0d6efd;
       cursor: crosshair;
     }
+    #warpedCanvas {
+      width: 100%;
+      max-width: 400px;
+      height: auto;
+      border-radius: 6px;
+      border: 2px solid #198754;
+      background: #fff;
+    }
 
     .item-soal-box {
       background: #ffffff;
@@ -95,7 +103,7 @@
             </div>
             
             <div class="d-grid gap-2 mt-4">
-              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Scan LJK (Adaptive OMR)</button>
+              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Scan LJK (Warp OMR Engine)</button>
               <button id="btnManual" class="btn btn-outline-secondary" disabled onclick="bukaManual()">Input Token Darurat</button>
             </div>
           </div>
@@ -114,28 +122,36 @@
           </div>
         </div>
 
-        <!-- Review Hasil Scan dengan Adaptive Thresholding -->
+        <!-- Review Hasil Scan dengan Perspective Warp -->
         <div id="areaKonfirmasi" class="card shadow-sm mb-4" style="display:none;">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="text-primary mb-0 fw-bold">Penyesuaian Area OMR & Review Hasil Scan</h6>
+              <h6 class="text-primary mb-0 fw-bold">Penyesuaian Area OMR & Live Verification</h6>
               <span class="badge bg-info text-dark" id="badgeTotalSoal">0 Soal</span>
             </div>
 
             <div class="alert alert-warning py-2 mb-2" style="font-size:12px;">
-              👈👉 <b>Petunjuk:</b> Geser <b>4 Lingkaran Hijau</b> pada gambar di bawah agar pas menempel di <b>4 sudut bingkai AREA JAWABAN (OMR)</b>, lalu klik <b>🔍 Scan Ulang Area Ini</b>.
+              👈👉 <b>Petunjuk Presisi:</b> Geser <b>4 Lingkaran Hijau</b> di foto bawah agar menempel tepat di <b>4 sudut bingkai AREA JAWABAN (OMR)</b>, lalu klik <b>🔍 Scan & Pipihkan Area LJK</b>.
             </div>
 
+            <!-- CANVAS INTERAKTIF DRAG CORNERS -->
             <div class="text-center mb-3">
-              <div class="crop-canvas-container">
+              <div class="crop-canvas-container mb-2">
                 <canvas id="interactiveCanvas"></canvas>
               </div>
-              <button class="btn btn-primary btn-sm mt-2 fw-bold" onclick="prosesScanBerdasarkanHandle()">🔍 Scan Ulang Area Ini</button>
+              <button class="btn btn-primary btn-md fw-bold px-4" onclick="prosesScanWarpPerspective()">🔍 Scan & Pipihkan Area LJK</button>
+            </div>
+
+            <!-- CANVAS HASIL PIPIHKAN (WARPED OMR PREVIEW) -->
+            <div id="boxWarpPreview" class="text-center mb-4 p-2 bg-light border rounded" style="display:none;">
+              <small class="fw-bold text-success d-block mb-2">✅ Gambar LJK yang Dipipihkan Tegak Lurus (Live Verification):</small>
+              <canvas id="warpedCanvas"></canvas>
+              <small class="text-muted d-block mt-1" style="font-size:11px;">*Lingkaran hijau menunjukkan bulatan yang terbaca sebagai pilihan siswa.</small>
             </div>
 
             <!-- LAYOUT JAWABAN 2 KOLOM -->
             <div class="alert alert-light border mb-3 p-3">
-              <small class="text-muted d-block mb-3">💡 <b>Review Pilihan Jawaban:</b> Hasil scan per nomor akan otomatis terdeteksi di bawah. Anda dapat melakukan penyesuaian jika diperlukan.</small>
+              <small class="text-muted d-block mb-3">💡 <b>Review Pilihan Jawaban:</b> Hasil scan per nomor terdeteksi di bawah secara otomatis. Anda tetap dapat melakukan penyesuaian manual jika diperlukan.</small>
               
               <div class="row g-2">
                 <div class="col-6 border-end pe-2" id="colLeftJawaban"></div>
@@ -321,7 +337,7 @@
 
     let dataGlobal = { sekolah: {}, siswa: {}, ujian: [] };
     let streamKamera = null; 
-    let fotoBase64Akhir = null; 
+    let fotoBase64Akhir = null; // Menyimpan Foto Utuh Asli (Beserta Kop) untuk Google Drive
     let fotoImageObj = new Image();
     let metodeInput = "Scan Kamera";
 
@@ -510,7 +526,7 @@
         };
 
         gambarInteractiveCanvas();
-        prosesScanBerdasarkanHandle();
+        prosesScanWarpPerspective();
       };
       fotoImageObj.src = fotoBase64Akhir;
 
@@ -604,91 +620,147 @@
       window.addEventListener('touchend', handleEnd);
     }
 
-    // UTAMA: PROSES ADAPTIVE THRESHOLDING + RELATIVE ROW COMPARISON
-    function prosesScanBerdasarkanHandle() {
+    // UTAMA: TRANSFORMASE PERSPEKTIF WARP + RELATIVE CONTRAST DELTA
+    function prosesScanWarpPerspective() {
       let iCanvas = document.getElementById('interactiveCanvas');
-      let ctx = iCanvas.getContext('2d');
-      
       gambarInteractiveCanvas();
 
       let u_data = dataGlobal.ujian.find(x => x.id_ujian == document.getElementById('selUjian').value);
       let totalSoal = u_data ? parseInt(u_data.jml_soal) || 30 : 30;
 
-      let resScan = deteksiBulatanAdaptiveOMR(ctx, iCanvas.width, iCanvas.height, cropCorners, totalSoal);
+      // 1. Buat Gambar Dipipihkan Tegak Lurus (800 x 1000 px)
+      let dstW = 800, dstH = 1000;
+      let warpedCanvas = warpPerspectiveCanvas(iCanvas, cropCorners, dstW, dstH);
 
-      // Gambar Indikator Visual (Hijau = Pilihan Terdeteksi)
+      // 2. Evaluasi OMR pada Gambar Dipipihkan Tegak Lurus
+      let resScan = deteksiOatWarpedCanvas(warpedCanvas, totalSoal);
+
+      // 3. Tampilkan Canvas Hasil Pipihan di Layar
+      let wPreviewCanvas = document.getElementById('warpedCanvas');
+      wPreviewCanvas.width = dstW;
+      wPreviewCanvas.height = dstH;
+      let wCtx = wPreviewCanvas.getContext('2d');
+      wCtx.drawImage(warpedCanvas, 0, 0);
+
+      // Draw Lingkaran Indikator Visual (Hijau = Terpilih, Merah = Kosong)
       resScan.samplingPoints.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 6, 0, 2 * Math.PI);
+        wCtx.beginPath();
+        wCtx.arc(p.x, p.y, p.radius, 0, 2 * Math.PI);
         if (p.isSelected) {
-          ctx.fillStyle = '#00ff2b'; // Dipilih (Paling Pekat)
+          wCtx.fillStyle = 'rgba(0, 255, 43, 0.75)';
+          wCtx.fill();
+          wCtx.lineWidth = 2;
+          wCtx.strokeStyle = '#000000';
+          wCtx.stroke();
         } else {
-          ctx.fillStyle = 'rgba(255, 0, 0, 0.35)'; // Tidak Dipilih
+          wCtx.strokeStyle = 'rgba(255, 0, 0, 0.35)';
+          wCtx.lineWidth = 1;
+          wCtx.stroke();
         }
-        ctx.fill();
       });
 
+      document.getElementById('boxWarpPreview').style.display = 'block';
+
       renderForm2Kolom(resScan.answers, totalSoal);
-      tampilkanNotif("Scan Selesai!", `Pilihan ${totalSoal} soal berhasil dipindai dengan Binarisasi Adaptif.`, "success");
+      tampilkanNotif("Hasil Pemindaian Selesai!", `Area LJK berhasil dipipihkan dan ${totalSoal} soal telah dipindai dengan akurasi presisi.`, "success");
     }
 
-    // ALGORITMA INTEGRAL IMAGE UNTUK KECERAHAN LOKAL & PERBANDINGAN RELATIF
-    function deteksiBulatanAdaptiveOMR(ctx, w, h, corners, totalSoal) {
-      let imgData = ctx.getImageData(0, 0, w, h);
-      let pixels = imgData.data;
+    // DUAL BILINEAR SAMPLING PERSPECTIVE WARP ENGINE
+    function warpPerspectiveCanvas(srcCanvas, corners, dstW, dstH) {
+      let dstCanvas = document.createElement('canvas');
+      dstCanvas.width = dstW;
+      dstCanvas.height = dstH;
+      let dstCtx = dstCanvas.getContext('2d');
+      let dstImgData = dstCtx.createImageData(dstW, dstH);
+      let dstPixels = dstImgData.data;
 
-      // 1. Buat Matriks Binarisasi Adaptif Lokal
-      let binaryMatrix = hitungAdaptiveBinarizationMatrix(pixels, w, h);
+      let srcCtx = srcCanvas.getContext('2d');
+      let srcPixels = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height).data;
+      let srcW = srcCanvas.width;
+      let srcH = srcCanvas.height;
+
+      for (let y = 0; y < dstH; y++) {
+        let v = y / (dstH - 1);
+        for (let x = 0; x < dstW; x++) {
+          let u = x / (dstW - 1);
+          let pt = mapBilinear(u, v, corners);
+          let sx = Math.round(pt.x);
+          let sy = Math.round(pt.y);
+
+          let dstIdx = (y * dstW + x) * 4;
+          if (sx >= 0 && sx < srcW && sy >= 0 && sy < srcH) {
+            let srcIdx = (sy * srcW + sx) * 4;
+            dstPixels[dstIdx]     = srcPixels[srcIdx];
+            dstPixels[dstIdx + 1] = srcPixels[srcIdx + 1];
+            dstPixels[dstIdx + 2] = srcPixels[srcIdx + 2];
+            dstPixels[dstIdx + 3] = 255;
+          } else {
+            dstPixels[dstIdx + 3] = 255;
+          }
+        }
+      }
+      dstCtx.putImageData(dstImgData, 0, 0);
+      return dstCanvas;
+    }
+
+    function mapBilinear(u, v, c) {
+      let x = (1-u)*(1-v)*c.tl.x + u*(1-v)*c.tr.x + (1-u)*v*c.bl.x + u*v*c.br.x;
+      let y = (1-u)*(1-v)*c.tl.y + u*(1-v)*c.tr.y + (1-u)*v*c.bl.y + u*v*c.br.y;
+      return { x, y };
+    }
+
+    // EVALUASI PERSIS GEOMETRI TATA LETAK LJK (2 KOLOM, OFFSET NOMOR, RELATIVE DELTA)
+    function deteksiOatWarpedCanvas(warpedCanvas, totalSoal) {
+      let w = warpedCanvas.width;
+      let h = warpedCanvas.height;
+      let ctx = warpedCanvas.getContext('2d');
+      let pixels = ctx.getImageData(0, 0, w, h).data;
 
       let half = Math.ceil(totalSoal / 2);
       let answers = [];
       let samplingPoints = [];
       let options = ['A', 'B', 'C', 'D', 'E'];
 
+      // Zona Grid Soal pada Gambar 800 x 1000
+      let gridTop = 75;
+      let gridBottom = 970;
+      let rowHeight = (gridBottom - gridTop) / half;
+      let radius = Math.min(10, Math.floor(rowHeight * 0.35));
+
       for (let i = 1; i <= totalSoal; i++) {
         let isRight = i > half;
         let rIdx = isRight ? (i - half - 1) : (i - 1);
-        let v = (rIdx + 0.5) / half; 
+        let cy = gridTop + (rIdx + 0.5) * rowHeight;
 
-        let rowRatios = [];
+        let rowAvgs = [];
         let rowPoints = [];
 
         for (let oIdx = 0; oIdx < 5; oIdx++) {
-          let u = 0;
+          let cx = 0;
           if (!isRight) {
-            u = 0.08 + (oIdx * 0.075);
+            cx = 105 + (oIdx * 40); // Posisi X A, B, C, D, E Kolom Kiri
           } else {
-            u = 0.58 + (oIdx * 0.075);
+            cx = 505 + (oIdx * 40); // Posisi X A, B, C, D, E Kolom Kanan
           }
 
-          let pt = mapBilinear(u, v, corners);
-          let ratio = hitungRasioHitamAdaptif(binaryMatrix, w, h, pt.x, pt.y);
-
-          rowRatios.push(ratio);
-          rowPoints.push({ x: pt.x, y: pt.y, opt: options[oIdx], ratio: ratio });
+          let avgGray = hitungRataRataGrayscaleCirc(pixels, w, h, cx, cy, radius);
+          rowAvgs.push(avgGray);
+          rowPoints.push({ x: cx, y: cy, opt: options[oIdx], avg: avgGray });
         }
 
-        // 2. Evaluasi Relatif 5 Pilihan dalam 1 Baris
-        let maxRatio = -1;
-        let maxIdx = -1;
-        let totalOtherRatios = 0;
+        // EVALUASI BEDA KONTRAS RELATIF PER BARIS (0 = PURE BLACK, 255 = PURE WHITE)
+        let minAvg = Math.min(...rowAvgs);
+        let minIdx = rowAvgs.indexOf(minAvg);
 
-        for (let r = 0; r < 5; r++) {
-          if (rowRatios[r] > maxRatio) {
-            maxRatio = rowRatios[r];
-            maxIdx = r;
-          }
-        }
+        let otherSum = 0;
+        for (let r = 0; r < 5; r++) { if (r !== minIdx) otherSum += rowAvgs[r]; }
+        let otherAvg = otherSum / 4;
 
-        for (let r = 0; r < 5; r++) {
-          if (r !== maxIdx) totalOtherRatios += rowRatios[r];
-        }
-        let avgOther = totalOtherRatios / 4;
+        let delta = otherAvg - minAvg; // Beda Gelap antara Pilihan Utama vs 4 pilihan lain
 
-        // Kriteria Pengisian Pensil/Pulpen:
-        // Rasio pilihan terhitam harus > 0.25 DAN minimal 2 kali lipat lebih pekat dibanding rata-rata 4 bulatan lain
-        let isChosen = (maxRatio > 0.25) && (maxRatio > avgOther * 1.8);
-        let chosenOpt = isChosen ? options[maxIdx] : '-';
+        // Kriteria Pengisian: Pilihan minimal 25 unit lebih gelap dibanding 4 bulatan lain
+        let isChosen = (delta >= 25) && (minAvg < 175);
+        let chosenOpt = isChosen ? options[minIdx] : '-';
 
         answers.push(chosenOpt);
 
@@ -696,7 +768,8 @@
           samplingPoints.push({
             x: rowPoints[r].x,
             y: rowPoints[r].y,
-            isSelected: (isChosen && r === maxIdx)
+            radius: radius,
+            isSelected: (isChosen && r === minIdx)
           });
         }
       }
@@ -704,71 +777,26 @@
       return { answers, samplingPoints };
     }
 
-    // PERHITUNGAN ADAPTIVE THRESHOLDING LOKAL (MENGHILANGKAN BAYANGAN & PANTULAN LAMPU)
-    function hitungAdaptiveBinarizationMatrix(pixels, w, h) {
-      let gray = new Uint8Array(w * h);
-      for (let i = 0; i < w * h; i++) {
-        let idx = i * 4;
-        gray[i] = (pixels[idx] * 299 + pixels[idx+1] * 587 + pixels[idx+2] * 114) / 1000;
-      }
+    function hitungRataRataGrayscaleCirc(pixels, imgW, imgH, cx, cy, radius) {
+      let sum = 0, count = 0;
+      let cxInt = Math.round(cx);
+      let cyInt = Math.round(cy);
 
-      let integral = new Int32Array((w + 1) * (h + 1));
-      for (let y = 0; y < h; y++) {
-        let sum = 0;
-        for (let x = 0; x < w; x++) {
-          sum += gray[y * w + x];
-          integral[(y + 1) * (w + 1) + (x + 1)] = integral[y * (w + 1) + (x + 1)] + sum;
-        }
-      }
-
-      let binary = new Uint8Array(w * h);
-      let win = 21; 
-      let halfW = Math.floor(win / 2);
-
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          let x1 = Math.max(0, x - halfW);
-          let x2 = Math.min(w - 1, x + halfW);
-          let y1 = Math.max(0, y - halfW);
-          let y2 = Math.min(h - 1, y + halfW);
-
-          let count = (x2 - x1 + 1) * (y2 - y1 + 1);
-          let sum = integral[(y2 + 1) * (w + 1) + (x2 + 1)] 
-                  - integral[(y1) * (w + 1) + (x2 + 1)] 
-                  - integral[(y2 + 1) * (w + 1) + (x1)] 
-                  + integral[(y1) * (w + 1) + (x1)];
-
-          let mean = sum / count;
-          let val = gray[y * w + x];
-          binary[y * w + x] = (val < (mean - 10)) ? 1 : 0; // 1 = Pensil/Tinta, 0 = Kertas
-        }
-      }
-
-      return binary;
-    }
-
-    function hitungRasioHitamAdaptif(binary, w, h, cx, cy) {
-      let hit = 0, tot = 0;
-      let r = 6;
-      for (let rx = -r; rx <= r; rx++) {
-        for (let ry = -r; ry <= r; ry++) {
-          if (rx*rx + ry*ry <= r*r) {
-            let px = Math.round(cx + rx);
-            let py = Math.round(cy + ry);
-            if (px >= 0 && px < w && py >= 0 && py < h) {
-              if (binary[py * w + px] === 1) hit++;
-              tot++;
+      for (let rx = -radius; rx <= radius; rx++) {
+        for (let ry = -radius; ry <= radius; ry++) {
+          if (rx * rx + ry * ry <= radius * radius) {
+            let px = cxInt + rx;
+            let py = cyInt + ry;
+            if (px >= 0 && px < imgW && py >= 0 && py < imgH) {
+              let idx = (py * imgW + px) * 4;
+              let gray = pixels[idx] * 0.299 + pixels[idx+1] * 0.587 + pixels[idx+2] * 0.114;
+              sum += gray;
+              count++;
             }
           }
         }
       }
-      return tot > 0 ? (hit / tot) : 0;
-    }
-
-    function mapBilinear(u, v, c) {
-      let x = (1-u)*(1-v)*c.tl.x + u*(1-v)*c.tr.x + (1-u)*v*c.bl.x + u*v*c.br.x;
-      let y = (1-u)*(1-v)*c.tl.y + u*(1-v)*c.tr.y + (1-u)*v*c.bl.y + u*v*c.br.y;
-      return { x, y };
+      return count > 0 ? (sum / count) : 255;
     }
 
     function renderForm2Kolom(answersArray, totalSoal) {
