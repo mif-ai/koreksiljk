@@ -565,47 +565,105 @@
       document.getElementById('boxUploadDarurat').style.display = 'none';
     }
 
-    function deteksiOtomatisArUcoMarker(srcCanvas) {
-      let ctx = srcCanvas.getContext('2d');
-      let imgData = ctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+    function deteksiOatWarpedCanvas(warpedCanvas, totalSoal) {
+  let w = warpedCanvas.width;   // 800px
+  let h = warpedCanvas.height;  // 1000px
+  let ctx = warpedCanvas.getContext('2d');
+  let pixels = ctx.getImageData(0, 0, w, h).data;
 
-      let detector = new AR.Detector();
-      let markers = detector.detect(imgData);
+  let half = Math.ceil(totalSoal / 2);
+  let answers = [];
+  let samplingPoints = [];
+  let options = ['A', 'B', 'C', 'D', 'E'];
 
-      let statusMsg = document.getElementById('msgArUcoStatus');
+  // Rentang estimasi area tabel OMR
+  let gridTopEst = 105;
+  let gridBottomEst = 935;
+  let estRowHeight = (gridBottomEst - gridTopEst) / half;
+  let radius = Math.min(8, Math.max(5, Math.floor(estRowHeight * 0.32)));
 
-      if (markers && markers.length >= 4) {
-        let foundTL = null, foundTR = null, foundBL = null, foundBR = null;
+  // Posisi X relatif untuk A, B, C, D, E (Kiri & Kanan)
+  let leftXBase  = [112, 164, 216, 268, 320];
+  let rightXBase = [512, 564, 616, 668, 720];
 
-        markers.forEach(m => {
-          let c = m.corners;
-          let avgX = (c[0].x + c[1].x + c[2].x + c[3].x) / 4;
-          let avgY = (c[0].y + c[1].y + c[2].y + c[3].y) / 4;
+  for (let i = 1; i <= totalSoal; i++) {
+    let isRight = i > half;
+    let rIdx = isRight ? (i - half - 1) : (i - 1);
+    
+    // 1. Estimasi posisi Y awal untuk baris ini
+    let estY = gridTopEst + (rIdx + 0.5) * estRowHeight + manualOffsetY;
 
-          if (avgX < srcCanvas.width * 0.5 && avgY < srcCanvas.height * 0.5) foundTL = { x: avgX, y: avgY };
-          else if (avgX >= srcCanvas.width * 0.5 && avgY < srcCanvas.height * 0.5) foundTR = { x: avgX, y: avgY };
-          else if (avgX < srcCanvas.width * 0.5 && avgY >= srcCanvas.height * 0.5) foundBL = { x: avgX, y: avgY };
-          else if (avgX >= srcCanvas.width * 0.5 && avgY >= srcCanvas.height * 0.5) foundBR = { x: avgX, y: avgY };
-        });
+    // 2. DYNAMIC ROW ALIGNMENT:
+    // Pindai rentang vertikal (±10px) untuk mengunci Y paling pas dengan bulatan terisi
+    let bestY = estY;
+    let maxRowDelta = -1;
+    let bestRowAvgs = [];
+    let currentXArr = isRight ? rightXBase : leftXBase;
 
-        if (foundTL && foundTR && foundBL && foundBR) {
-          cropCorners = { tl: foundTL, tr: foundTR, bl: foundBL, br: foundBR };
-          statusMsg.className = "alert alert-success py-2 mb-2";
-          statusMsg.innerHTML = "✅ <b>4 ArUco Marker Terkunci Otomatis (Akurasi Presisi)!</b> Area LJK berhasil dipipihkan otomatis.";
-        } else {
-          setFallbackCorners(srcCanvas);
-          statusMsg.className = "alert alert-warning py-2 mb-2";
-          statusMsg.innerHTML = "⚠️ <b>Sebagian Marker Terhalang:</b> Posisi awal disesuaikan. Silakan periksa titik hijau.";
-        }
-      } else {
-        setFallbackCorners(srcCanvas);
-        statusMsg.className = "alert alert-warning py-2 mb-2";
-        statusMsg.innerHTML = "⚠️ <b>Marker ArUco Kurang Jelas:</b> Silakan geser 4 lingkaran hijau pada gambar di bawah jika posisi belum pas.";
+    for (let deltaY = -10; deltaY <= 10; deltaY += 2) {
+      let testY = estY + deltaY;
+      let testAvgs = [];
+
+      for (let oIdx = 0; oIdx < 5; oIdx++) {
+        let testX = currentXArr[oIdx] + manualOffsetX;
+        let gray = hitungRataRataGrayscaleCirc(pixels, w, h, testX, testY, radius);
+        testAvgs.push(gray);
       }
 
-      gambarInteractiveCanvas();
-      prosesScanWarpPerspective();
+      let minG = Math.min(...testAvgs);
+      let maxG = Math.max(...testAvgs);
+      let deltaG = maxG - minG;
+
+      // Cari Y yang memberikan selisih kontras tertinggi antara bulatan terhitam & terputih
+      if (deltaG > maxRowDelta) {
+        maxRowDelta = deltaG;
+        bestY = testY;
+        bestRowAvgs = testAvgs;
+      }
     }
+
+    // Jika semua bulatan kosong/putih (deltaG kecil), gunakan estimasi Y standar
+    if (maxRowDelta < 12) {
+      bestY = estY;
+      bestRowAvgs = [];
+      for (let oIdx = 0; oIdx < 5; oIdx++) {
+        let testX = currentXArr[oIdx] + manualOffsetX;
+        bestRowAvgs.push(hitungRataRataGrayscaleCirc(pixels, w, h, testX, bestY, radius));
+      }
+    }
+
+    // 3. MEMILIH LINGKARAN TERHITAM (DARKEST BUBBLE)
+    let minAvg = Math.min(...bestRowAvgs);
+    let minIdx = bestRowAvgs.indexOf(minAvg);
+
+    // Hitung rata-rata kehitaman 4 bulatan lainnya di baris yang sama
+    let otherSum = 0;
+    for (let r = 0; r < 5; r++) { if (r !== minIdx) otherSum += bestRowAvgs[r]; }
+    let otherAvg = otherSum / 4;
+
+    let delta = otherAvg - minAvg;
+
+    // Kriteria Jawaban Terisi:
+    // Bulatan terhitam harus signifikan lebih gelap dari bulatan sekitarnya (delta >= 14)
+    // DAN kehitaman bulatan < 195 (bukan putih bersih)
+    let isChosen = (delta >= 14) && (minAvg < 195);
+    let chosenOpt = isChosen ? options[minIdx] : '-';
+
+    answers.push(chosenOpt);
+
+    // Simpan titik indikator hijau/merah untuk tampilan Review Canvas
+    for (let r = 0; r < 5; r++) {
+      samplingPoints.push({
+        x: currentXArr[r] + manualOffsetX,
+        y: bestY,
+        radius: radius,
+        isSelected: (isChosen && r === minIdx)
+      });
+    }
+  }
+
+  return { answers, samplingPoints };
+}
 
     function setFallbackCorners(canvas) {
       cropCorners = {
