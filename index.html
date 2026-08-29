@@ -9,6 +9,17 @@
     body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     .admin-panel { background: #ffffff; }
     .table-hover tbody tr:hover { background-color: #f1f5f9; }
+    .item-soal-box {
+      background: #ffffff;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 6px 10px;
+    }
+    .item-soal-box label {
+      font-weight: bold;
+      font-size: 13px;
+      color: #0d6efd;
+    }
     #modalNotifikasi .modal-header.bg-success { background-color: #198754 !important; }
     #modalNotifikasi .modal-header.bg-danger { background-color: #dc3545 !important; }
     #modalNotifikasi .modal-header.bg-warning { background-color: #ffc107 !important; color: #000 !important; }
@@ -51,35 +62,52 @@
             </div>
             
             <div class="d-grid gap-2 mt-4">
-              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Scan LJK (Kamera Nativ)</button>
+              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Scan LJK (Auto-Detect OMR)</button>
               <button id="btnManual" class="btn btn-outline-secondary" disabled onclick="bukaManual()">Input Token Darurat</button>
             </div>
           </div>
         </div>
 
-        <!-- Kamera Area -->
+        <!-- Area Kamera -->
         <div id="areaKamera" class="card shadow-sm mb-4" style="display:none;">
           <div class="card-body text-center">
             <video id="videoElement" autoplay playsinline style="width:100%; border-radius:8px; background:#000;"></video>
-            <p class="text-muted small mt-2">Arahkan kamera ke kertas LJK.</p>
-            <button class="btn btn-success me-2" onclick="ambilFoto()">Ambil Gambar</button>
+            <p class="text-muted small mt-2">Posisikan seluruh kertas LJK terlihat jelas di layar.</p>
+            <button class="btn btn-success me-2" onclick="ambilFotoDanScanOMR()">📷 Ambil & Auto-Scan</button>
             <button class="btn btn-danger" onclick="tutupKamera()">Batal</button>
             <canvas id="canvasElement" style="display:none;"></canvas>
           </div>
         </div>
 
-        <!-- Konfirmasi Area -->
+        <!-- Area Konfirmasi / Hasil Scan -->
         <div id="areaKonfirmasi" class="card shadow-sm mb-4" style="display:none;">
           <div class="card-body">
-            <h6 class="text-primary">Preview Jawaban</h6>
-            <input type="text" id="inputJawaban" class="form-control mb-3" placeholder="Contoh: A,B,C,D,A...">
-            <small class="text-muted d-block mb-3">*Gunakan huruf kapital dipisah koma.</small>
-            <img id="imgPreview" src="" style="max-width:100%; display:none; margin-bottom:15px; border-radius:8px;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="text-primary mb-0 fw-bold">Hasil Pembacaan Jawaban (Per Soal)</h6>
+              <span class="badge bg-info text-dark" id="badgeTotalSoal">0 Soal</span>
+            </div>
+
+            <!-- Preview Foto -->
+            <div class="text-center mb-3">
+              <img id="imgPreview" src="" style="max-width:100%; max-height:250px; display:none; border-radius:8px; border:1px solid #ccc;">
+            </div>
+
+            <!-- GRID PENOMORAN JAWABAN INTERAKTIF -->
+            <div class="alert alert-light border mb-3">
+              <small class="text-muted d-block mb-2">💡 <b>Petunjuk:</b> Periksa nomor di bawah. Jika hasil auto-scan ada yang keliru, Anda dapat mengubahnya langsung pada nomor soal terkait.</small>
+              <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 g-2" id="gridJawabanSiswa">
+                <!-- Pilihan per nomor akan dimuat di sini -->
+              </div>
+            </div>
+
+            <input type="hidden" id="inputJawaban">
+
             <div class="mb-3" id="boxUploadDarurat" style="display:none;">
-              <label class="form-label text-danger">Upload Foto LJK Fisik (Wajib):</label>
+              <label class="form-label text-danger fw-bold">Upload Foto LJK Fisik (Wajib untuk Token Darurat):</label>
               <input type="file" id="fileManual" accept="image/*" class="form-control">
             </div>
-            <button class="btn btn-success w-100" id="btnKirim" onclick="kirimData()">Kirim Jawaban Final</button>
+
+            <button class="btn btn-success w-100 btn-lg mt-2" id="btnKirim" onclick="kirimData()">Kirim Jawaban Final</button>
           </div>
         </div>
       </div>
@@ -246,13 +274,12 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
-    // URL WEB APP APPS SCRIPT ANDA
+    // URL WEB APP APPS SCRIPT
     const GAS_URL = "https://script.google.com/macros/s/AKfycbxO9WEDtHMmKC8S8xHLMhV-6qfxd7dxPtynlDc2NE0vu9ngK06H1CNPe74hOT5_XZrr/exec";
 
     let dataGlobal = { sekolah: {}, siswa: {}, ujian: [] };
     let streamKamera = null; let fotoBase64Akhir = null; let metodeInput = "Scan Kamera";
 
-    // JEMBATAN API FETCH KE GOOGLE APPS SCRIPT
     function callApi(actionName, payloadData, onSuccess, onError) {
       fetch(GAS_URL, {
         method: "POST",
@@ -390,7 +417,7 @@
       }
     }
 
-    // NATIVE KAMERA ACCESS (100% BEBAS IFRAME DI GITHUB PAGES)
+    // KAMERA NATIVE
     function bukaKamera() {
       document.getElementById('areaKamera').style.display = 'block';
       navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
@@ -399,7 +426,7 @@
           document.getElementById('videoElement').srcObject = stream;
         })
         .catch(err => {
-          tampilkanNotif("Izin Kamera Ditolak", "Browser memblokir kamera. Silakan izinkan akses kamera pada ikon gembok bilah alamat URL browser Anda.", "warning");
+          tampilkanNotif("Izin Kamera Ditolak", "Browser memblokir kamera. Izinkan akses kamera di ikon gembok URL browser.", "warning");
         });
     }
 
@@ -408,33 +435,164 @@
       document.getElementById('areaKamera').style.display = 'none';
     }
 
-    function ambilFoto() {
+    // ALGORITMA AUTO-SCAN OMR (CANVAS PIXEL BRIGHTNESS)
+    function ambilFotoDanScanOMR() {
       let video = document.getElementById('videoElement');
       let canvas = document.getElementById('canvasElement');
       let ctx = canvas.getContext('2d');
-      canvas.width = 800; canvas.height = (video.videoHeight / video.videoWidth) * 800;
+      
+      canvas.width = 800;
+      canvas.height = Math.round((video.videoHeight / video.videoWidth) * 800) || 1000;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
       fotoBase64Akhir = canvas.toDataURL('image/jpeg', 0.6);
       tutupKamera();
-      
+
+      let u_data = dataGlobal.ujian.find(x => x.id_ujian == document.getElementById('selUjian').value);
+      let totalSoal = u_data ? parseInt(u_data.jml_soal) || 10 : 10;
+
+      // Jalankan Pendeteksi Piksel Terhitam per Bulatan
+      let detectedArray = prosesOmrPiksel(ctx, canvas.width, canvas.height, totalSoal);
+
+      // Tampilkan Hasil di Layar Konfirmasi dengan Penomoran Urut
+      renderFormNomorUrut(detectedArray, totalSoal);
+
       document.getElementById('areaKonfirmasi').style.display = 'block';
       document.getElementById('boxUploadDarurat').style.display = 'none';
       document.getElementById('imgPreview').src = fotoBase64Akhir;
       document.getElementById('imgPreview').style.display = 'inline';
-      tampilkanNotif("Foto Berhasil Diambil", "Silakan ketik konfirmasi jawaban lalu klik Kirim Jawaban Final.", "success");
+
+      tampilkanNotif("Auto-Scan Selesai!", `Sistem berhasil memindai ${totalSoal} soal. Silakan periksa atau koreksi pilihan jika ada yang kurang sesuai.`, "success");
+    }
+
+    // PENGOLAHAN CITRA OMR UNTUK MENDETEKSI BULATAN HITAM A-E
+    function prosesOmrPiksel(ctx, width, height, totalSoal) {
+      let imgData = ctx.getImageData(0, 0, width, height);
+      let pixels = imgData.data;
+
+      let half = Math.ceil(totalSoal / 2);
+      let detected = [];
+      let options = ['A', 'B', 'C', 'D', 'E'];
+
+      // Area Perkiraan Zona OMR (Sisi Bawah Kertas)
+      let startY = height * 0.40;
+      let endY = height * 0.90;
+      let omrHeight = endY - startY;
+      let rowHeight = omrHeight / half;
+
+      for (let i = 1; i <= totalSoal; i++) {
+        let isRightCol = i > half;
+        let rowIndex = isRightCol ? (i - half - 1) : (i - 1);
+        let currentY = startY + (rowIndex * rowHeight) + (rowHeight / 2);
+
+        let colStartX = isRightCol ? (width * 0.55) : (width * 0.15);
+        let colWidth = width * 0.32;
+        let optWidth = colWidth / 5;
+
+        let darkestOption = '-';
+        let minBrightness = 255;
+
+        for (let oIdx = 0; oIdx < options.length; oIdx++) {
+          let currentX = colStartX + (oIdx * optWidth) + (optWidth / 2);
+          let brightness = hitungKepadatanPiksel(pixels, width, currentX, currentY);
+
+          if (brightness < minBrightness) {
+            minBrightness = brightness;
+            darkestOption = options[oIdx];
+          }
+        }
+
+        // Jika bulatan cukup hitam (threshold < 170), tetapkan sebagai jawaban
+        if (minBrightness < 170) {
+          detected.push(darkestOption);
+        } else {
+          detected.push('-'); // Kosong jika tidak ada bulatan hitam
+        }
+      }
+
+      return detected;
+    }
+
+    function hitungKepadatanPiksel(pixels, width, centerX, centerY) {
+      let totalBrightness = 0;
+      let count = 0;
+      let radius = 6;
+
+      for (let rx = -radius; rx <= radius; rx++) {
+        for (let ry = -radius; ry <= radius; ry++) {
+          let px = Math.round(centerX + rx);
+          let py = Math.round(centerY + ry);
+          let index = (py * width + px) * 4;
+
+          let r = pixels[index];
+          let g = pixels[index + 1];
+          let b = pixels[index + 2];
+          let avg = (r + g + b) / 3;
+
+          totalBrightness += avg;
+          count++;
+        }
+      }
+
+      return totalBrightness / count;
+    }
+
+    // RENDER PENOMORAN URUT & DROPDOWN EDIT MANUALLY
+    function renderFormNomorUrut(detectedArray, totalSoal) {
+      let gridContainer = document.getElementById('gridJawabanSiswa');
+      gridContainer.innerHTML = '';
+      document.getElementById('badgeTotalSoal').innerText = totalSoal + " Soal";
+
+      for (let i = 1; i <= totalSoal; i++) {
+        let valDetect = detectedArray[i - 1] || '-';
+        
+        let htmlBox = `
+          <div class="col">
+            <div class="item-soal-box d-flex align-items-center justify-content-between">
+              <label for="optSoal_${i}">No. ${i}</label>
+              <select class="form-select form-select-sm sel-jawaban-nomor" style="width:70px;" id="optSoal_${i}" onchange="updateMasterJawabanString()">
+                <option value="-" ${valDetect === '-' ? 'selected' : ''}>-</option>
+                <option value="A" ${valDetect === 'A' ? 'selected' : ''}>A</option>
+                <option value="B" ${valDetect === 'B' ? 'selected' : ''}>B</option>
+                <option value="C" ${valDetect === 'C' ? 'selected' : ''}>C</option>
+                <option value="D" ${valDetect === 'D' ? 'selected' : ''}>D</option>
+                <option value="E" ${valDetect === 'E' ? 'selected' : ''}>E</option>
+              </select>
+            </div>
+          </div>`;
+        gridContainer.innerHTML += htmlBox;
+      }
+
+      updateMasterJawabanString();
+    }
+
+    function updateMasterJawabanString() {
+      let selects = document.querySelectorAll('.sel-jawaban-nomor');
+      let jawabanList = [];
+      selects.forEach(sel => jawabanList.push(sel.value));
+      document.getElementById('inputJawaban').value = jawabanList.join(',');
     }
 
     function bukaManual() {
       let token = prompt("Masukkan Token Darurat dari Guru:");
       if (!token) return;
       let valid = dataGlobal.ujian.find(u => u.id_ujian == document.getElementById('selUjian').value && String(u.token_manual) === String(token));
+      
       if(valid) {
         metodeInput = "Manual Token";
+        let u_data = dataGlobal.ujian.find(x => x.id_ujian == document.getElementById('selUjian').value);
+        let totalSoal = u_data ? parseInt(u_data.jml_soal) || 10 : 10;
+
+        let emptyArray = Array(totalSoal).fill('-');
+        renderFormNomorUrut(emptyArray, totalSoal);
+
         document.getElementById('areaKonfirmasi').style.display = 'block';
         document.getElementById('imgPreview').style.display = 'none';
         document.getElementById('boxUploadDarurat').style.display = 'block';
-        tampilkanNotif("Token Valid", "Silakan isi urutan jawaban dan unggah foto LJK Anda.", "success");
-      } else { tampilkanNotif("Token Salah", "Token darurat tidak valid!", "error"); }
+        tampilkanNotif("Token Valid", "Silakan pilih jawaban per nomor soal lalu unggah foto LJK fisik Anda.", "success");
+      } else { 
+        tampilkanNotif("Token Salah", "Token darurat tidak valid!", "error"); 
+      }
     }
 
     function kirimData() {
