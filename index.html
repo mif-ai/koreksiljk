@@ -204,10 +204,17 @@
                 <input type="text" id="ujMateri" class="form-control form-control-sm" placeholder="Cth: Ekosistem"></div>
               <div class="mb-2"><label class="form-label small">Jumlah Soal</label>
                 <input type="number" id="ujJumlah" class="form-control form-control-sm" placeholder="Cth: 20"></div>
-              <div class="mb-3"><label class="form-label small">Kunci Jawaban</label>
-                <input type="text" id="ujKunci" class="form-control form-control-sm" placeholder="A,B,C,D,E...">
-                <small class="text-muted" style="font-size:11px;">*Pisahkan dengan koma</small>
+              
+              <!-- INPUT KUNCI JAWABAN INTERAKTIF MODAL POPUP -->
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Kunci Jawaban</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" id="ujKunci" class="form-control text-uppercase" placeholder="Klik Set Kunci..." readonly>
+                  <button class="btn btn-outline-primary" type="button" onclick="bukaModalKunciJawaban()">🔑 Set / Edit Kunci</button>
+                </div>
+                <small class="text-muted" style="font-size:10.5px;">*Kunci akan diatur per nomor urut via pop-up</small>
               </div>
+
               <div class="d-flex gap-2">
                 <button class="btn btn-primary btn-sm w-100" id="btnSimpanUjian" onclick="simpanUjianAdmin()">Simpan Ujian</button>
                 <button class="btn btn-secondary btn-sm" id="btnBatalEdit" style="display:none;" onclick="resetFormUjian()">Batal</button>
@@ -235,6 +242,30 @@
           <button class="btn btn-success mt-3 w-100" onclick="simpanPengaturanAdmin()">Simpan Pengaturan</button>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL EDIT KUNCI JAWABAN INTERAKTIF PER NOMOR -->
+  <div class="modal fade" id="modalKunciJawaban" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold" id="titleModalKunci">🔑 Input Kunci Jawaban Per Nomor</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body bg-light">
+          <div class="alert alert-info py-2 small mb-3">
+            Pilih Opsi Kunci Jawaban (A/B/C/D/E) untuk setiap nomor urut soal di bawah ini.
+          </div>
+          <div class="row g-2" id="containerGridKunci">
+            <!-- Grid Dinamis Nomor Urut Kunci Jawaban -->
+          </div>
+        </div>
+        <div class="modal-footer bg-white">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" class="btn btn-success fw-bold px-4" onclick="simpanKunciDariModal()">Simpan Kunci Jawaban</button>
+        </div>
       </div>
     </div>
   </div>
@@ -516,7 +547,6 @@
       }
     }
 
-    // CEK DUPLIKASI LANGSUNG SAAT PILIH NAMA / BAB UJIAN (MENGHEMAT KUOTA AI)
     function cekDuplikasiSiswa() {
       let kls = document.getElementById('selKelas').value;
       let nama = document.getElementById('selNama').value;
@@ -902,6 +932,52 @@
       });
     }
 
+    // ==============================================================================
+    // MODAL KUNCI JAWABAN INTERAKTIF GURU
+    // ==============================================================================
+    function bukaModalKunciJawaban() {
+      let jmlSoal = parseInt(document.getElementById('ujJumlah').value) || 0;
+      if (jmlSoal <= 0) {
+        tampilkanNotif("Jumlah Soal Kosong", "Isi Jumlah Soal terlebih dahulu sebelum memasukkan kunci jawaban!", "warning");
+        return;
+      }
+
+      let existingKunci = document.getElementById('ujKunci').value.split(',').map(s => s.trim().toUpperCase());
+      let container = document.getElementById('containerGridKunci');
+      container.innerHTML = '';
+
+      for (let i = 1; i <= jmlSoal; i++) {
+        let valKunci = existingKunci[i - 1] || 'A';
+        container.innerHTML += `
+          <div class="col-6 col-sm-4 col-md-3">
+            <div class="p-2 border rounded bg-white d-flex align-items-center justify-content-between shadow-sm">
+              <span class="fw-bold text-primary me-1" style="font-size: 13px;">No. ${i}</span>
+              <select class="form-select form-select-sm sel-kunci-modal fw-bold text-center" style="width: 65px;" data-no="${i}">
+                <option value="A" ${valKunci === 'A' ? 'selected' : ''}>A</option>
+                <option value="B" ${valKunci === 'B' ? 'selected' : ''}>B</option>
+                <option value="C" ${valKunci === 'C' ? 'selected' : ''}>C</option>
+                <option value="D" ${valKunci === 'D' ? 'selected' : ''}>D</option>
+                <option value="E" ${valKunci === 'E' ? 'selected' : ''}>E</option>
+              </select>
+            </div>
+          </div>`;
+      }
+
+      document.getElementById('titleModalKunci').innerText = `🔑 Input Kunci Jawaban (Total: ${jmlSoal} Soal)`;
+      let modalEl = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalKunciJawaban'));
+      modalEl.show();
+    }
+
+    function simpanKunciDariModal() {
+      let selects = document.querySelectorAll('.sel-kunci-modal');
+      let arrKunci = [];
+      selects.forEach(s => arrKunci.push(s.value));
+      document.getElementById('ujKunci').value = arrKunci.join(',');
+
+      let modalEl = bootstrap.Modal.getInstance(document.getElementById('modalKunciJawaban'));
+      if (modalEl) modalEl.hide();
+    }
+
     function simpanUjianAdmin() {
       let editId = document.getElementById('editIdUjian').value;
       let selKls = document.getElementById('ujKelas');
@@ -913,7 +989,7 @@
         materi: document.getElementById('ujMateri').value, jml_soal: document.getElementById('ujJumlah').value,
         kunci: document.getElementById('ujKunci').value.toUpperCase()
       };
-      if(!payload.mapel || !payload.kunci) { tampilkanNotif("Form Tidak Lengkap", "Mapel & Kunci wajib diisi!", "warning"); return; }
+      if(!payload.mapel || !payload.kunci) { tampilkanNotif("Form Tidak Lengkap", "Mapel & Kunci Jawaban wajib diisi!", "warning"); return; }
 
       let action = editId ? 'updateUjian' : 'buatUjianBaru';
       callApi(action, payload, res => {
@@ -1077,7 +1153,7 @@
           setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
 
           let modalEl = document.getElementById('modalCetakLJK');
-          let modalInstance = bootstrap.Modal.getInstance(modalEl);
+          let modalInstance = bootstrap.Modal.getInstance(document.getElementById('modalCetakLJK'));
           if (modalInstance) modalInstance.hide();
 
           tampilkanNotif("Download Berhasil!", `File PDF LJK A4 Landscape Berhasil Diunduh!<br>Jumlah: <b>${res.total_siswa} Siswa</b>`, "success");
