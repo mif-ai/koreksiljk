@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Asesmen OMR Digital AI - SMAN 1 Karangbinangun</title>
+  <title>Koreksi LJK Siswa SMAN 1 Karangbinangun</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -35,11 +35,14 @@
 <body>
 
   <div id="app-container">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <!-- NAVBAR HEADER -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
       <div class="container">
-        <span class="navbar-brand mb-0 h1">SMAN 1 Karangbinangun OMR AI</span>
+        <span class="navbar-brand mb-0 h1 fw-bold">
+          📝 Koreksi LJK Siswa SMAN 1 Karangbinangun
+        </span>
         <div>
-          <button class="btn btn-sm btn-light me-2" onclick="switchView('siswa')">Portal Siswa</button>
+          <button class="btn btn-sm btn-light me-2 fw-semibold" onclick="switchView('siswa')">Portal Siswa</button>
           <button class="btn btn-sm btn-outline-light" onclick="switchView('login')">Admin Guru</button>
         </div>
       </div>
@@ -50,8 +53,9 @@
       <!-- VIEW: PORTAL SISWA -->
       <div id="view-siswa">
         <div class="card shadow-sm mb-4 border-0">
-          <div class="card-header bg-white">
-            <h5 class="mb-0 text-primary">Formulir Pengumpulan LJK</h5>
+          <div class="card-header bg-white py-3">
+            <h5 class="mb-0 text-primary fw-bold">Formulir Pengumpulan LJK</h5>
+            <small class="text-muted">Pilih Kelas, Nama, dan Ujian untuk memulai pemindaian Lembar Jawaban</small>
           </div>
           <div class="card-body">
             <div class="mb-3">
@@ -68,9 +72,9 @@
             </div>
             
             <div class="d-grid gap-2 mt-4">
-              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Ambil Foto LJK (Gemini AI Vision)</button>
-              <button id="btnUpload" class="btn btn-outline-primary btn-lg" disabled onclick="pilihFileLjk()">📁 Upload File Foto LJK</button>
-              <button id="btnManual" class="btn btn-outline-secondary" disabled onclick="bukaManual()">Input Token Darurat</button>
+              <button id="btnScan" class="btn btn-primary btn-lg fw-bold py-3" disabled onclick="bukaKamera()">📸 Ambil Foto LJK</button>
+              <button id="btnUpload" class="btn btn-outline-primary btn-lg fw-semibold" disabled onclick="pilihFileLjk()">📁 Upload File Foto LJK</button>
+              <button id="btnManual" class="btn btn-outline-secondary btn-sm mt-1" disabled onclick="bukaManual()">Input Token Darurat</button>
               <input type="file" id="fileInputDirect" accept="image/*" style="display:none;" onchange="handleDirectFileUpload(event)">
             </div>
           </div>
