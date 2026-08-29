@@ -3,67 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Asesmen OMR Digital - SMAN 1 Karangbinangun</title>
+  <title>Asesmen OMR Digital AI - SMAN 1 Karangbinangun</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  
-  <!-- LIBRARY ARUCO AUTO-DETECTOR -->
-  <script src="https://cdn.jsdelivr.net/gh/jasonmayes/js-aruco/src/cv.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/jasonmayes/js-aruco/src/aruco.js"></script>
-
   <style>
     body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     .admin-panel { background: #ffffff; }
     .table-hover tbody tr:hover { background-color: #f1f5f9; }
     
     .camera-wrapper {
-      position: relative;
-      width: 100%;
-      max-width: 650px;
-      margin: 0 auto;
-      overflow: hidden;
-      border-radius: 8px;
-      background: #000;
-    }
-
-    .crop-canvas-container {
-      position: relative;
-      display: inline-block;
-      width: 100%;
-      max-width: 650px;
-      margin: 0 auto;
-      touch-action: none;
-    }
-    #interactiveCanvas {
-      width: 100%;
-      height: auto;
-      border-radius: 6px;
-      border: 2px solid #0d6efd;
-      cursor: crosshair;
-    }
-    #warpedCanvas {
-      width: 100%;
-      max-width: 400px;
-      height: auto;
-      border-radius: 6px;
-      border: 2px solid #198754;
-      background: #fff;
+      position: relative; width: 100%; max-width: 650px;
+      margin: 0 auto; overflow: hidden; border-radius: 8px; background: #000;
     }
 
     .item-soal-box {
-      background: #ffffff;
-      border: 1px solid #ced4da;
-      border-radius: 5px;
-      padding: 4px 8px;
-      margin-bottom: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      background: #ffffff; border: 1px solid #ced4da; border-radius: 5px;
+      padding: 4px 8px; margin-bottom: 6px; display: flex;
+      align-items: center; justify-content: space-between;
     }
-    .item-soal-box label {
-      font-weight: bold;
-      font-size: 12.5px;
-      color: #0d6efd;
-      margin: 0;
+    .item-soal-box label { font-weight: bold; font-size: 12.5px; color: #0d6efd; margin: 0; }
+
+    #previewFotoLjk {
+      max-width: 100%; height: auto; border-radius: 6px; border: 2px solid #0d6efd;
     }
 
     #modalNotifikasi .modal-header.bg-success { background-color: #198754 !important; }
@@ -77,7 +37,7 @@
   <div id="app-container">
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
       <div class="container">
-        <span class="navbar-brand mb-0 h1">SMAN 1 Karangbinangun OMR</span>
+        <span class="navbar-brand mb-0 h1">SMAN 1 Karangbinangun OMR AI</span>
         <div>
           <button class="btn btn-sm btn-light me-2" onclick="switchView('siswa')">Portal Siswa</button>
           <button class="btn btn-sm btn-outline-light" onclick="switchView('login')">Admin Guru</button>
@@ -108,8 +68,10 @@
             </div>
             
             <div class="d-grid gap-2 mt-4">
-              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Scan LJK (Auto-ArUco OMR)</button>
+              <button id="btnScan" class="btn btn-primary btn-lg" disabled onclick="bukaKamera()">📸 Ambil Foto LJK (Gemini AI Vision)</button>
+              <button id="btnUpload" class="btn btn-outline-primary btn-lg" disabled onclick="pilihFileLjk()">📁 Upload File Foto LJK</button>
               <button id="btnManual" class="btn btn-outline-secondary" disabled onclick="bukaManual()">Input Token Darurat</button>
+              <input type="file" id="fileInputDirect" accept="image/*" style="display:none;" onchange="handleDirectFileUpload(event)">
             </div>
           </div>
         </div>
@@ -120,56 +82,31 @@
             <div class="camera-wrapper">
               <video id="videoElement" autoplay playsinline style="width:100%; height:auto; display:block;"></video>
             </div>
-            <p class="text-muted small mt-2 mb-2">Posisikan seluruh kertas LJK di layar lalu tekan Ambil Foto.</p>
+            <p class="text-muted small mt-2 mb-2">Posisikan seluruh kertas LJK tegak lurus di layar, lalu tekan Ambil Foto.</p>
             <button class="btn btn-success me-2 fw-bold btn-lg" onclick="ambilFotoAsli()">📷 Ambil Foto LJK</button>
             <button class="btn btn-danger" onclick="tutupKamera()">Batal</button>
             <canvas id="canvasElement" style="display:none;"></canvas>
           </div>
         </div>
 
-        <!-- Review Hasil Scan dengan Auto-ArUco & Perspective Warp -->
+        <!-- Review Hasil Scan Gemini AI Vision -->
         <div id="areaKonfirmasi" class="card shadow-sm mb-4" style="display:none;">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="text-primary mb-0 fw-bold">Auto-ArUco Alignment & Review</h6>
+              <h6 class="text-primary mb-0 fw-bold">Hasil Analisis Gemini AI Vision</h6>
               <span class="badge bg-info text-dark" id="badgeTotalSoal">0 Soal</span>
             </div>
 
-            <div class="alert alert-info py-2 mb-2" id="msgArUcoStatus" style="font-size:12px;">
-              ⚡ <b>Sistem Otomatis:</b> Mencari 4 ArUco Marker pada sudut kertas...
+            <div class="alert alert-success py-2 mb-3" id="msgAiStatus" style="font-size:12.5px;">
+              ✨ <b>Pemrosesan Berhasil:</b> AI telah membaca pilihan jawaban Anda.
             </div>
 
-            <!-- CANVAS INTERAKTIF DRAG CORNERS -->
             <div class="text-center mb-3">
-              <div class="crop-canvas-container mb-2">
-                <canvas id="interactiveCanvas"></canvas>
-              </div>
-              <button class="btn btn-primary btn-md fw-bold px-4 mb-2" onclick="prosesScanWarpPerspective()">🔍 Hitung / Scan Ulang Area Ini</button>
-              
-              <!-- PANEL KALIBRASI PRESI INDIKATOR SCAN -->
-              <div class="bg-light p-2 border rounded d-inline-block w-100 max-w-500 text-center mt-1">
-                <small class="fw-bold d-block text-secondary mb-1">🛠️ Fine-Tuning Posisi Titik Pemindai (Jika Bulatan Miskom/Geser):</small>
-                <div class="btn-group btn-group-sm me-2 mb-1">
-                  <button class="btn btn-outline-secondary" onclick="adjustOffset(0, -3)">⬆️ Atas</button>
-                  <button class="btn btn-outline-secondary" onclick="adjustOffset(0, 3)">⬇️ Bawah</button>
-                </div>
-                <div class="btn-group btn-group-sm mb-1">
-                  <button class="btn btn-outline-secondary" onclick="adjustOffset(-3, 0)">⬅️ Kiri</button>
-                  <button class="btn btn-outline-secondary" onclick="adjustOffset(3, 0)">➡️ Kanan</button>
-                  <button class="btn btn-outline-danger" onclick="resetOffset()">🔄 Reset</button>
-                </div>
-              </div>
+              <img id="previewFotoLjk" src="" alt="Preview LJK">
             </div>
 
-            <!-- CANVAS HASIL PIPIHKAN (WARPED OMR PREVIEW) -->
-            <div id="boxWarpPreview" class="text-center mb-4 p-2 bg-light border rounded" style="display:none;">
-              <small class="fw-bold text-success d-block mb-2">✅ Gambar Area LJK & Titik Pemindai (Hijau = Terdeteksi):</small>
-              <canvas id="warpedCanvas"></canvas>
-            </div>
-
-            <!-- LAYOUT JAWABAN 2 KOLOM -->
             <div class="alert alert-light border mb-3 p-3">
-              <small class="text-muted d-block mb-3">💡 <b>Review Pilihan Jawaban:</b> Hasil scan per nomor terdeteksi otomatis di bawah. Anda dapat menyesuaikan pilihan jika diperlukan.</small>
+              <small class="text-muted d-block mb-3">💡 <b>Review Pilihan Jawaban:</b> Periksa dan pastikan opsi yang terdeteksi AI di bawah ini sudah sesuai.</small>
               
               <div class="row g-2">
                 <div class="col-6 border-end pe-2" id="colLeftJawaban"></div>
@@ -356,27 +293,7 @@
     let dataGlobal = { sekolah: {}, siswa: {}, ujian: [] };
     let streamKamera = null; 
     let fotoBase64Akhir = null; 
-    let fotoImageObj = new Image();
-    let metodeInput = "Scan Kamera";
-
-    let cropCorners = { tl: { x: 0, y: 0 }, tr: { x: 0, y: 0 }, bl: { x: 0, y: 0 }, br: { x: 0, y: 0 } };
-    let activeHandle = null;
-
-    // Offset manual fine-tuning
-    let manualOffsetX = 0;
-    let manualOffsetY = 0;
-
-    function adjustOffset(dx, dy) {
-      manualOffsetX += dx;
-      manualOffsetY += dy;
-      prosesScanWarpPerspective();
-    }
-
-    function resetOffset() {
-      manualOffsetX = 0;
-      manualOffsetY = 0;
-      prosesScanWarpPerspective();
-    }
+    let metodeInput = "Scan AI Vision";
 
     function base64ToBlob(base64, mimeType = 'application/pdf') {
       let byteCharacters = atob(base64);
@@ -428,7 +345,6 @@
     window.onload = function() {
       switchView('siswa');
       muatDataSistem();
-      inisialisasiEventDragCanvas();
     }
 
     function muatDataSistem() {
@@ -519,10 +435,14 @@
         let ujianUrut = (dataGlobal.ujian || []).filter(u => u.status === "Aktif" && (u.kelas.includes(kls) || u.kelas.includes("Semua Kelas") || u.kelas === ""));
         ujianUrut.forEach(u => { selUjian.innerHTML += `<option value="${u.id_ujian}">${u.mapel} - ${u.materi}</option>`; });
         
-        document.getElementById('btnScan').disabled = false; document.getElementById('btnManual').disabled = false;
+        document.getElementById('btnScan').disabled = false; 
+        document.getElementById('btnUpload').disabled = false; 
+        document.getElementById('btnManual').disabled = false;
       } else {
         selNama.disabled = true; selUjian.disabled = true;
-        document.getElementById('btnScan').disabled = true; document.getElementById('btnManual').disabled = true;
+        document.getElementById('btnScan').disabled = true; 
+        document.getElementById('btnUpload').disabled = true; 
+        document.getElementById('btnManual').disabled = true;
       }
     }
 
@@ -534,13 +454,28 @@
           document.getElementById('videoElement').srcObject = stream;
         })
         .catch(err => {
-          tampilkanNotif("Izin Kamera Ditolak", "Browser memblokir kamera. Izinkan akses kamera pada ikon gembok URL browser.", "warning");
+          tampilkanNotif("Izin Kamera Ditolak", "Gunakan tombol Upload Foto jika kamera terblokir browser.", "warning");
         });
     }
 
     function tutupKamera() {
       if(streamKamera) streamKamera.getTracks().forEach(t => t.stop());
       document.getElementById('areaKamera').style.display = 'none';
+    }
+
+    function pilihFileLjk() {
+      document.getElementById('fileInputDirect').click();
+    }
+
+    function handleDirectFileUpload(event) {
+      let file = event.target.files[0];
+      if (!file) return;
+      let reader = new FileReader();
+      reader.onload = e => {
+        fotoBase64Akhir = e.target.result;
+        prosesScanDenganGeminiAI(fotoBase64Akhir);
+      };
+      reader.readAsDataURL(file);
     }
 
     function ambilFotoAsli() {
@@ -552,380 +487,45 @@
       canvas.height = Math.round((video.videoHeight / video.videoWidth) * 1000) || 1300;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      fotoBase64Akhir = canvas.toDataURL('image/jpeg', 0.6);
+      fotoBase64Akhir = canvas.toDataURL('image/jpeg', 0.85);
       tutupKamera();
 
-      fotoImageObj = new Image();
-      fotoImageObj.onload = function() {
-        deteksiOtomatisArUcoMarker(canvas);
-      };
-      fotoImageObj.src = fotoBase64Akhir;
-
-      document.getElementById('areaKonfirmasi').style.display = 'block';
-      document.getElementById('boxUploadDarurat').style.display = 'none';
+      prosesScanDenganGeminiAI(fotoBase64Akhir);
     }
 
-    function deteksiOatWarpedCanvas(warpedCanvas, totalSoal) {
-  let w = warpedCanvas.width;   // 800px
-  let h = warpedCanvas.height;  // 1000px
-  let ctx = warpedCanvas.getContext('2d');
-  let pixels = ctx.getImageData(0, 0, w, h).data;
-
-  let half = Math.ceil(totalSoal / 2);
-  let answers = [];
-  let samplingPoints = [];
-  let options = ['A', 'B', 'C', 'D', 'E'];
-
-  // Rentang estimasi area tabel OMR
-  let gridTopEst = 105;
-  let gridBottomEst = 935;
-  let estRowHeight = (gridBottomEst - gridTopEst) / half;
-  let radius = Math.min(8, Math.max(5, Math.floor(estRowHeight * 0.32)));
-
-  // Posisi X relatif untuk A, B, C, D, E (Kiri & Kanan)
-  let leftXBase  = [112, 164, 216, 268, 320];
-  let rightXBase = [512, 564, 616, 668, 720];
-
-  for (let i = 1; i <= totalSoal; i++) {
-    let isRight = i > half;
-    let rIdx = isRight ? (i - half - 1) : (i - 1);
-    
-    // 1. Estimasi posisi Y awal untuk baris ini
-    let estY = gridTopEst + (rIdx + 0.5) * estRowHeight + manualOffsetY;
-
-    // 2. DYNAMIC ROW ALIGNMENT:
-    // Pindai rentang vertikal (±10px) untuk mengunci Y paling pas dengan bulatan terisi
-    let bestY = estY;
-    let maxRowDelta = -1;
-    let bestRowAvgs = [];
-    let currentXArr = isRight ? rightXBase : leftXBase;
-
-    for (let deltaY = -10; deltaY <= 10; deltaY += 2) {
-      let testY = estY + deltaY;
-      let testAvgs = [];
-
-      for (let oIdx = 0; oIdx < 5; oIdx++) {
-        let testX = currentXArr[oIdx] + manualOffsetX;
-        let gray = hitungRataRataGrayscaleCirc(pixels, w, h, testX, testY, radius);
-        testAvgs.push(gray);
-      }
-
-      let minG = Math.min(...testAvgs);
-      let maxG = Math.max(...testAvgs);
-      let deltaG = maxG - minG;
-
-      // Cari Y yang memberikan selisih kontras tertinggi antara bulatan terhitam & terputih
-      if (deltaG > maxRowDelta) {
-        maxRowDelta = deltaG;
-        bestY = testY;
-        bestRowAvgs = testAvgs;
-      }
-    }
-
-    // Jika semua bulatan kosong/putih (deltaG kecil), gunakan estimasi Y standar
-    if (maxRowDelta < 12) {
-      bestY = estY;
-      bestRowAvgs = [];
-      for (let oIdx = 0; oIdx < 5; oIdx++) {
-        let testX = currentXArr[oIdx] + manualOffsetX;
-        bestRowAvgs.push(hitungRataRataGrayscaleCirc(pixels, w, h, testX, bestY, radius));
-      }
-    }
-
-    // 3. MEMILIH LINGKARAN TERHITAM (DARKEST BUBBLE)
-    let minAvg = Math.min(...bestRowAvgs);
-    let minIdx = bestRowAvgs.indexOf(minAvg);
-
-    // Hitung rata-rata kehitaman 4 bulatan lainnya di baris yang sama
-    let otherSum = 0;
-    for (let r = 0; r < 5; r++) { if (r !== minIdx) otherSum += bestRowAvgs[r]; }
-    let otherAvg = otherSum / 4;
-
-    let delta = otherAvg - minAvg;
-
-    // Kriteria Jawaban Terisi:
-    // Bulatan terhitam harus signifikan lebih gelap dari bulatan sekitarnya (delta >= 14)
-    // DAN kehitaman bulatan < 195 (bukan putih bersih)
-    let isChosen = (delta >= 14) && (minAvg < 195);
-    let chosenOpt = isChosen ? options[minIdx] : '-';
-
-    answers.push(chosenOpt);
-
-    // Simpan titik indikator hijau/merah untuk tampilan Review Canvas
-    for (let r = 0; r < 5; r++) {
-      samplingPoints.push({
-        x: currentXArr[r] + manualOffsetX,
-        y: bestY,
-        radius: radius,
-        isSelected: (isChosen && r === minIdx)
-      });
-    }
-  }
-
-  return { answers, samplingPoints };
-}
-
-    function setFallbackCorners(canvas) {
-      cropCorners = {
-        tl: { x: canvas.width * 0.05, y: canvas.height * 0.28 },
-        tr: { x: canvas.width * 0.95, y: canvas.height * 0.28 },
-        bl: { x: canvas.width * 0.05, y: canvas.height * 0.96 },
-        br: { x: canvas.width * 0.95, y: canvas.height * 0.96 }
-      };
-    }
-
-    function gambarInteractiveCanvas() {
-      let iCanvas = document.getElementById('interactiveCanvas');
-      iCanvas.width = fotoImageObj.width;
-      iCanvas.height = fotoImageObj.height;
-      let ctx = iCanvas.getContext('2d');
-
-      ctx.drawImage(fotoImageObj, 0, 0);
-
-      ctx.strokeStyle = '#00ff2b';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(cropCorners.tl.x, cropCorners.tl.y);
-      ctx.lineTo(cropCorners.tr.x, cropCorners.tr.y);
-      ctx.lineTo(cropCorners.br.x, cropCorners.br.y);
-      ctx.lineTo(cropCorners.bl.x, cropCorners.bl.y);
-      ctx.closePath();
-      ctx.stroke();
-
-      ctx.fillStyle = 'rgba(0, 255, 43, 0.12)';
-      ctx.fill();
-
-      drawCornerHandle(ctx, cropCorners.tl);
-      drawCornerHandle(ctx, cropCorners.tr);
-      drawCornerHandle(ctx, cropCorners.bl);
-      drawCornerHandle(ctx, cropCorners.br);
-    }
-
-    function drawCornerHandle(ctx, pt) {
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 18, 0, 2 * Math.PI);
-      ctx.fillStyle = '#00ff2b';
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#000000';
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 6, 0, 2 * Math.PI);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-    }
-
-    function inisialisasiEventDragCanvas() {
-      let iCanvas = document.getElementById('interactiveCanvas');
-
-      function getCanvasPoint(e) {
-        let rect = iCanvas.getBoundingClientRect();
-        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        let scaleX = iCanvas.width / rect.width;
-        let scaleY = iCanvas.height / rect.height;
-        return {
-          x: (clientX - rect.left) * scaleX,
-          y: (clientY - rect.top) * scaleY
-        };
-      }
-
-      function handleStart(e) {
-        let pt = getCanvasPoint(e);
-        let radiusThreshold = 45;
-
-        ['tl', 'tr', 'bl', 'br'].forEach(k => {
-          let dist = Math.hypot(cropCorners[k].x - pt.x, cropCorners[k].y - pt.y);
-          if (dist < radiusThreshold) activeHandle = k;
-        });
-      }
-
-      function handleMove(e) {
-        if (!activeHandle) return;
-        let pt = getCanvasPoint(e);
-        cropCorners[activeHandle].x = Math.max(0, Math.min(iCanvas.width, pt.x));
-        cropCorners[activeHandle].y = Math.max(0, Math.min(iCanvas.height, pt.y));
-        gambarInteractiveCanvas();
-      }
-
-      function handleEnd() { activeHandle = null; }
-
-      iCanvas.addEventListener('mousedown', handleStart);
-      iCanvas.addEventListener('mousemove', handleMove);
-      window.addEventListener('mouseup', handleEnd);
-
-      iCanvas.addEventListener('touchstart', handleStart, { passive: false });
-      iCanvas.addEventListener('touchmove', handleMove, { passive: false });
-      window.addEventListener('touchend', handleEnd);
-    }
-
-    function prosesScanWarpPerspective() {
-      let iCanvas = document.getElementById('interactiveCanvas');
-      gambarInteractiveCanvas();
-
-      let u_data = dataGlobal.ujian.find(x => x.id_ujian == document.getElementById('selUjian').value);
+    function prosesScanDenganGeminiAI(base64Data) {
+      let idUjian = document.getElementById('selUjian').value;
+      let u_data = dataGlobal.ujian.find(x => x.id_ujian == idUjian);
       let totalSoal = u_data ? parseInt(u_data.jml_soal) || 30 : 30;
 
-      let dstW = 800, dstH = 1000;
-      let warpedCanvas = warpPerspectiveCanvas(iCanvas, cropCorners, dstW, dstH);
+      document.getElementById('previewFotoLjk').src = base64Data;
+      document.getElementById('areaKonfirmasi').style.display = 'block';
+      document.getElementById('boxUploadDarurat').style.display = 'none';
 
-      let resScan = deteksiOatWarpedCanvas(warpedCanvas, totalSoal);
+      let msgStatus = document.getElementById('msgAiStatus');
+      msgStatus.className = "alert alert-warning py-2 mb-3";
+      msgStatus.innerHTML = "⏳ <b>Gemini AI Vision Sedang Memindai...</b> Mohon tunggu 2-4 detik.";
 
-      let wPreviewCanvas = document.getElementById('warpedCanvas');
-      wPreviewCanvas.width = dstW;
-      wPreviewCanvas.height = dstH;
-      let wCtx = wPreviewCanvas.getContext('2d');
-      wCtx.drawImage(warpedCanvas, 0, 0);
+      let btnKirim = document.getElementById('btnKirim');
+      btnKirim.disabled = true;
 
-      resScan.samplingPoints.forEach(p => {
-        wCtx.beginPath();
-        wCtx.arc(p.x, p.y, p.radius, 0, 2 * Math.PI);
-        if (p.isSelected) {
-          wCtx.fillStyle = 'rgba(0, 255, 43, 0.85)';
-          wCtx.fill();
-          wCtx.lineWidth = 2;
-          wCtx.strokeStyle = '#000000';
-          wCtx.stroke();
-        } else {
-          wCtx.strokeStyle = 'rgba(255, 0, 0, 0.45)';
-          wCtx.lineWidth = 1.5;
-          wCtx.stroke();
-        }
-      });
-
-      document.getElementById('boxWarpPreview').style.display = 'block';
-      renderForm2Kolom(resScan.answers, totalSoal);
-    }
-
-    function warpPerspectiveCanvas(srcCanvas, corners, dstW, dstH) {
-      let dstCanvas = document.createElement('canvas');
-      dstCanvas.width = dstW;
-      dstCanvas.height = dstH;
-      let dstCtx = dstCanvas.getContext('2d');
-      let dstImgData = dstCtx.createImageData(dstW, dstH);
-      let dstPixels = dstImgData.data;
-
-      let srcCtx = srcCanvas.getContext('2d');
-      let srcPixels = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height).data;
-      let srcW = srcCanvas.width;
-      let srcH = srcCanvas.height;
-
-      for (let y = 0; y < dstH; y++) {
-        let v = y / (dstH - 1);
-        for (let x = 0; x < dstW; x++) {
-          let u = x / (dstW - 1);
-          let pt = mapBilinear(u, v, corners);
-          let sx = Math.round(pt.x);
-          let sy = Math.round(pt.y);
-
-          let dstIdx = (y * dstW + x) * 4;
-          if (sx >= 0 && sx < srcW && sy >= 0 && sy < srcH) {
-            let srcIdx = (sy * srcW + sx) * 4;
-            dstPixels[dstIdx]     = srcPixels[srcIdx];
-            dstPixels[dstIdx + 1] = srcPixels[srcIdx + 1];
-            dstPixels[dstIdx + 2] = srcPixels[srcIdx + 2];
-            dstPixels[dstIdx + 3] = 255;
-          } else {
-            dstPixels[dstIdx + 3] = 255;
-          }
-        }
-      }
-      dstCtx.putImageData(dstImgData, 0, 0);
-      return dstCanvas;
-    }
-
-    function mapBilinear(u, v, c) {
-      let x = (1-u)*(1-v)*c.tl.x + u*(1-v)*c.tr.x + (1-u)*v*c.bl.x + u*v*c.br.x;
-      let y = (1-u)*(1-v)*c.tl.y + u*(1-v)*c.tr.y + (1-u)*v*c.bl.y + u*v*c.br.y;
-      return { x, y };
-    }
-
-    // ALGORITMA OM-R BINARISASI: PENGHITUNG KEPATATAN PIKSEL HITAM
-function deteksiOatWarpedCanvas(warpedCanvas, totalSoal) {
-  let w = warpedCanvas.width;
-  let h = warpedCanvas.height;
-  let ctx = warpedCanvas.getContext('2d');
-  let pixels = ctx.getImageData(0, 0, w, h).data;
-
-  let half = Math.ceil(totalSoal / 2);
-  let answers = [];
-  let samplingPoints = [];
-  let options = ['A', 'B', 'C', 'D', 'E'];
-
-  let leftXBase  = [112, 164, 216, 268, 320];
-  let rightXBase = [512, 564, 616, 668, 720];
-
-  let gridTopEst = 115;
-  let gridBottomEst = 925;
-  let estRowHeight = (gridBottomEst - gridTopEst) / half;
-  let radius = Math.min(9, Math.max(6, Math.floor(estRowHeight * 0.35)));
-
-  for (let i = 1; i <= totalSoal; i++) {
-    let isRight = i > half;
-    let rIdx = isRight ? (i - half - 1) : (i - 1);
-    let estY = gridTopEst + (rIdx + 0.5) * estRowHeight + manualOffsetY;
-    let currentXArr = isRight ? rightXBase : leftXBase;
-
-    let rowBlackRatios = [];
-
-    for (let oIdx = 0; oIdx < 5; oIdx++) {
-      let cx = currentXArr[oIdx] + manualOffsetX;
-      // Hitung rasio piksel gelap/hitam (0.0 - 1.0)
-      let blackRatio = hitungRasioPikselHitam(pixels, w, h, cx, estY, radius);
-      rowBlackRatios.push(blackRatio);
-    }
-
-    let maxRatio = Math.max(...rowBlackRatios);
-    let maxIdx = rowBlackRatios.indexOf(maxRatio);
-
-    let otherSum = 0;
-    for (let r = 0; r < 5; r++) { if (r !== maxIdx) otherSum += rowBlackRatios[r]; }
-    let otherAvg = otherSum / 4;
-
-    // Jawaban terdeteksi jika bulatan terhitam memiliki kepadatan piksel jauh lebih tinggi dari bulatan lain
-    let isChosen = (maxRatio >= 0.42) && ((maxRatio - otherAvg) >= 0.20);
-    let chosenOpt = isChosen ? options[maxIdx] : '-';
-
-    answers.push(chosenOpt);
-
-    for (let r = 0; r < 5; r++) {
-      samplingPoints.push({
-        x: currentXArr[r] + manualOffsetX,
-        y: estY,
-        radius: radius,
-        isSelected: (isChosen && r === maxIdx)
-      });
-    }
-  }
-
-  return { answers, samplingPoints };
-}
-
-// HELPER: HITUNG PERSENTASE PIKSEL GELAP (GRAYSCALE < 130)
-function hitungRasioPikselHitam(pixels, imgW, imgH, cx, cy, radius) {
-  let blackCount = 0, totalCount = 0;
-  let cxInt = Math.round(cx);
-  let cyInt = Math.round(cy);
-
-  for (let rx = -radius; rx <= radius; rx++) {
-    for (let ry = -radius; ry <= radius; ry++) {
-      if (rx * rx + ry * ry <= radius * radius) {
-        let px = cxInt + rx;
-        let py = cyInt + ry;
-        if (px >= 0 && px < imgW && py >= 0 && py < imgH) {
-          let idx = (py * imgW + px) * 4;
-          let gray = pixels[idx] * 0.299 + pixels[idx+1] * 0.587 + pixels[idx+2] * 0.114;
+      callApi('scanLjkDenganAI', { fotoBase64: base64Data, totalSoal: totalSoal }, res => {
+        btnKirim.disabled = false;
+        if (res.status === "sukses") {
+          msgStatus.className = "alert alert-success py-2 mb-3";
+          msgStatus.innerHTML = `✨ <b>Analisis AI Selesai!</b> Pilihan jawaban siswa terdeteksi otomatis.`;
           
-          // Piksel dianggap "hitam/gelap" jika nilai grayscale di bawah 130
-          if (gray < 130) blackCount++;
-          totalCount++;
+          let jawabanArray = String(res.jawaban || "").split(',');
+          renderForm2Kolom(jawabanArray, totalSoal);
+        } else {
+          msgStatus.className = "alert alert-danger py-2 mb-3";
+          msgStatus.innerHTML = `❌ <b>Gagal Membaca AI:</b> ${res.pesan}. Silakan atur manual pilihan jawaban di bawah.`;
+          let emptyArray = Array(totalSoal).fill('-');
+          renderForm2Kolom(emptyArray, totalSoal);
         }
-      }
+      });
     }
-  }
-  return totalCount > 0 ? (blackCount / totalCount) : 0;
-}
+
     function renderForm2Kolom(answersArray, totalSoal) {
       let colLeft = document.getElementById('colLeftJawaban');
       let colRight = document.getElementById('colRightJawaban');
@@ -984,7 +584,7 @@ function hitungRasioPikselHitam(pixels, imgW, imgH, cx, cy, radius) {
 
         document.getElementById('areaKonfirmasi').style.display = 'block';
         document.getElementById('boxUploadDarurat').style.display = 'block';
-        tampilkanNotif("Token Valid", "Silakan pilih jawaban per nomor soal pada kolom 1 & 2 di bawah.", "success");
+        tampilkanNotif("Token Valid", "Silakan pilih jawaban per nomor soal pada kolom di bawah.", "success");
       } else { 
         tampilkanNotif("Token Salah", "Token darurat tidak valid!", "error"); 
       }
