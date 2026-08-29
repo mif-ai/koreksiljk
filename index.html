@@ -353,6 +353,17 @@
     };
     let activeHandle = null;
 
+    // Helper konversi Base64 ke Blob untuk penanganan Download LJK aman di semua browser
+    function base64ToBlob(base64, mimeType = 'application/pdf') {
+      let byteCharacters = atob(base64);
+      let byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      let byteArray = new Uint8Array(byteNumbers);
+      return new Blob([byteArray], { type: mimeType });
+    }
+
     function callApi(actionName, payloadData, onSuccess, onError) {
       fetch(GAS_URL, {
         method: "POST",
@@ -522,7 +533,6 @@
 
       fotoImageObj = new Image();
       fotoImageObj.onload = function() {
-        // Deteksi ArUco Otomatis
         deteksiOtomatisArUcoMarker(canvas);
       };
       fotoImageObj.src = fotoBase64Akhir;
@@ -531,7 +541,6 @@
       document.getElementById('boxUploadDarurat').style.display = 'none';
     }
 
-    // ALGORITMA DETEKSI OTOMATIS ARUCO MARKERS DENGAN JS-ARUCO
     function deteksiOtomatisArUcoMarker(srcCanvas) {
       let ctx = srcCanvas.getContext('2d');
       let imgData = ctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
@@ -542,7 +551,6 @@
       let statusMsg = document.getElementById('msgArUcoStatus');
 
       if (markers && markers.length >= 4) {
-        // Cari Marker 4 Sudut Berdasarkan Posisi / ID
         let foundTL = null, foundTR = null, foundBL = null, foundBR = null;
 
         markers.forEach(m => {
@@ -1060,18 +1068,23 @@
       if (!u) return;
 
       document.getElementById('cetakIdUjian').value = idUjian;
-      document.getElementById('cetakInfoUjian').innerHTML = `Ujian: <strong>${u.mapel} (${u.materi})</strong> | Target: <strong>${u.kelas}</strong>`;
+      document.getElementById('cetakInfoUjian').innerHTML = `Ujian: <strong>${u.mapel} (${u.materi})</strong> | Target: <strong>${u.kelas || 'Semua Kelas'}</strong>`;
       document.getElementById('cetakMode').value = "semua";
       
       let selKelas = document.getElementById('cetakSelKelas');
       selKelas.innerHTML = '<option value="">-- Pilih Kelas --</option>';
+
       let targetClasses = String(u.kelas || '').split(',').map(c => c.trim());
-      targetClasses.forEach(k => { if(k) selKelas.innerHTML += `<option value="${k}">${k}</option>`; });
+      let classesToList = (targetClasses.includes("Semua Kelas") || targetClasses.includes("") || !u.kelas)
+        ? Object.keys(dataGlobal.siswa || {}).sort()
+        : targetClasses;
+
+      classesToList.forEach(k => { if(k) selKelas.innerHTML += `<option value="${k}">${k}</option>`; });
 
       document.getElementById('boxCetakKelas').style.display = 'none';
       document.getElementById('boxCetakSiswa').style.display = 'none';
 
-      let modalEl = new bootstrap.Modal(document.getElementById('modalCetakLJK'));
+      let modalEl = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCetakLJK'));
       modalEl.show();
     }
 
@@ -1112,7 +1125,11 @@
 
       if (mode === "semua") {
         let kelasArray = String(ujian.kelas || '').split(',').map(c => c.trim());
-        kelasArray.forEach(k => {
+        let availableClasses = (kelasArray.includes("Semua Kelas") || kelasArray.includes("") || !ujian.kelas)
+          ? Object.keys(dataGlobal.siswa || {})
+          : kelasArray;
+
+        availableClasses.forEach(k => {
           if (dataGlobal.siswa && dataGlobal.siswa[k]) {
             dataGlobal.siswa[k].forEach(s => targetSiswa.push({ ...s, kelasMap: k }));
           }
@@ -1142,12 +1159,18 @@
       callApi('generatePdfLjk', { ujian: ujian, targetSiswa: targetSiswa, filterLabel: filterLabel }, res => {
         btnCetak.innerText = "📥 Download PDF LJK"; btnCetak.disabled = false;
         if(res.status === "sukses") {
+          // Membuat Blob dan URL Object agar kompatibel di semua browser
+          let blob = base64ToBlob(res.base64, 'application/pdf');
+          let blobUrl = URL.createObjectURL(blob);
+
           let link = document.createElement('a');
-          link.href = "data:application/pdf;base64," + res.base64;
+          link.href = blobUrl;
           link.download = res.filename;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
+
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
 
           let modalEl = document.getElementById('modalCetakLJK');
           let modalInstance = bootstrap.Modal.getInstance(modalEl);
